@@ -49,13 +49,22 @@ public sealed class ClipPipeline(
             var clipTranscript = transcript.Shift(-cut.Start);
             clipTranscript = new Transcript(clipTranscript.Words.Where(w => w.Start < cut.Duration).ToList());
 
-            var reframe = Reframer.Plan(info.Width, info.Height, settings.Reframe);
+            NormRect? cam = null;
+            if (Reframer.NeedsReframe(info.Width, info.Height, settings.Reframe) && settings.Reframe.Mode == ReframeMode.Split)
+            {
+                cam = settings.Reframe.CamRect ?? await FindCamAsync(sourceFile, cut, ct).ConfigureAwait(false);
+            }
+
+            var reframe = Reframer.Plan(info.Width, info.Height, settings.Reframe, cam);
             var (outWidth, outHeight) = reframe is null ? (info.Width, info.Height) : (reframe.TargetWidth, reframe.TargetHeight);
             if (reframe is not null)
             {
-                log(reframe.Mode == ReframeMode.Crop
-                    ? $"  Querformat ({info.Width}x{info.Height}): wird auf 9:16 zugeschnitten"
-                    : $"  Querformat ({info.Width}x{info.Height}): wird mit unscharfem Hintergrund ins Hochformat gesetzt");
+                log(reframe.Mode switch
+                {
+                    ReframeMode.Split => $"  Querformat ({info.Width}x{info.Height}): Cam {(settings.Reframe.CamRect is null ? "gefunden" : "aus den Einstellungen")}, kommt nach oben, Spiel darunter",
+                    ReframeMode.Crop => $"  Querformat ({info.Width}x{info.Height}): wird auf 9:16 zugeschnitten",
+                    _ => $"  Querformat ({info.Width}x{info.Height}): wird mit unscharfem Hintergrund ins Hochformat gesetzt",
+                });
             }
 
             var logoPath = ResolveLogo();
@@ -142,6 +151,19 @@ public sealed class ClipPipeline(
         return Path.GetFullPath(path);
     }
 
+    private async Task<NormRect?> FindCamAsync(string video, CutPlan cut, CancellationToken ct)
+    {
+        const int w = 320, h = 180, n = 8;
+        var frames = new List<byte[]>();
+        for (var i = 0; i < n; i++)
+        {
+            var (px, _, _) = await ffmpeg.GrabFrameAsync(video, cut.Start + cut.Duration * (i + 0.5) / n, w, h, "rgb24", ct).ConfigureAwait(false);
+            frames.Add(px);
+        }
+
+        return CamFinder.Find(frames, w, h);
+    }
+
     private async Task<LayoutDecision> CheckLayoutAsync(string video, CutPlan cut, ReframePlan? reframe, string? logoPath,
                                                          int outWidth, int outHeight, CancellationToken ct)
     {
@@ -163,6 +185,6 @@ public sealed class ClipPipeline(
             }
         }
 
-        return LayoutChecker.Decide(edges, reframe is not null, settings.Reframe.Mode, settings.Logo, settings.Captions, logoHeight);
+        return LayoutChecker.Decide(edges, reframe, settings.Logo, settings.Captions, logoHeight);
     }
 }

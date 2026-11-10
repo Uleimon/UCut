@@ -23,7 +23,7 @@ Du kannst UCut auch Clips von Hand geben, z. B. alte Twitch-Clips oder Aufnahmen
 UCut prüft dabei jeden Clip:
 
 - **Toter Anfang:** wird wie immer weggeschnitten.
-- **Querformat oder Quadrat:** wird automatisch ins Hochformat 1080x1920 gebracht. Standard ist `crop` (Bild füllt den Bildschirm, die Seiten werden abgeschnitten). Mit `"reframe": { "mode": "blur" }` bleibt das ganze Bild in der Mitte und ein unscharfer Hintergrund füllt den Rest. `reframe.focusX` bestimmt beim Zuschneiden, welcher Teil bleibt (0 = links, 0,5 = Mitte, 1 = rechts).
+- **Querformat oder Quadrat:** wird automatisch ins Hochformat 1080x1920 gebracht. Standard ist `split`: UCut sucht den Cam-Ausschnitt im Bild (ein fester Rahmen, in dem sich etwas bewegt und Hautfarbe zu sehen ist), setzt die Cam oben über die ganze Breite und das Spiel darunter. Das Uleimon-Logo kommt unten an die Cam. Findet UCut keine Cam, greift `reframe.fallbackMode`: `crop` (Bild füllt den Bildschirm, die Seiten werden abgeschnitten) oder `blur` (ganzes Bild in der Mitte, unscharfer Hintergrund). Liegt die Cam immer an derselben Stelle, kann man sie fest eintragen, dann wird nicht gesucht: `"reframe": { "camRect": { "x": 0.74, "y": 0.72, "width": 0.26, "height": 0.26 } }` (Anteile vom Bild, 0 bis 1). `reframe.maxCamHeight` begrenzt, wie viel Platz die Cam oben bekommt (Standard 0,45 = 45 %). `reframe.focusX` bestimmt, welcher Teil vom Spiel bleibt (0 = links, 0,5 = Mitte, 1 = rechts). Mit `"mode": "crop"` oder `"blur"` wird die Cam-Suche ganz ausgeschaltet.
 - **Hochformat:** bleibt wie es ist.
 - **Spiel:** Ein frischer Clip (jünger als 15 Minuten) bekommt das Spiel, das gerade läuft. Ältere Clips landen in `Unsortiert`, außer du gibst `--game` an.
 
@@ -36,7 +36,8 @@ Jeder Clip wird gegen dein Layout geprüft (Cam oben, Namensleiste darunter, Spi
 | **passt** (Cam-Kante dort, wo `logo.expectedCamEdge` sagt) | Logo und Abdeckung der alten Namensleiste wie eingestellt |
 | **angepasst** (Cam größer oder kleiner) | Logo wandert an die echte Cam-Kante, nichts wird übermalt |
 | **keine Cam erkannt** | Logo an Standardposition, nichts wird übermalt |
-| **Querformat umgewandelt** | keine Abdeckung; beim Zuschneiden kann eine Cam am Rand wegfallen, `reframe.mode = blur` behält das ganze Bild |
+| **Cam oben, Spiel unten** | Cam im Querformat gefunden und nach oben gesetzt, Logo unten an der Cam, Untertitel im Spielbereich |
+| **Querformat umgewandelt** | keine Cam gefunden; beim Zuschneiden kann eine Cam am Rand wegfallen, `reframe.camRect` stellt ihre Position fest ein |
 
 Untertitel werden immer unterhalb der Cam gehalten. Das Ergebnis steht im Log und in der Infodatei unter `layout`.
 

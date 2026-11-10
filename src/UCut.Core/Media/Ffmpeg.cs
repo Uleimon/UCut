@@ -71,7 +71,11 @@ public sealed partial class Ffmpeg(string ffmpegPath, string ffprobePath)
     }
 
     /// <summary>Grabs one frame as raw 8-bit grey pixels, scaled to the given width (height keeps the aspect ratio).</summary>
-    public async Task<(byte[] Pixels, int Width, int Height)> GrabGrayFrameAsync(string video, double atSeconds, int width, int height, CancellationToken ct = default)
+    public Task<(byte[] Pixels, int Width, int Height)> GrabGrayFrameAsync(string video, double atSeconds, int width, int height, CancellationToken ct = default) =>
+        GrabFrameAsync(video, atSeconds, width, height, "gray", ct);
+
+    /// <summary>Grabs one frame as raw pixels (pixFmt "gray" = 1 byte, "rgb24" = 3 bytes per pixel), scaled to width x height.</summary>
+    public async Task<(byte[] Pixels, int Width, int Height)> GrabFrameAsync(string video, double atSeconds, int width, int height, string pixFmt, CancellationToken ct = default)
     {
         var tmp = Path.Combine(Path.GetTempPath(), $"ucut-frame-{Guid.NewGuid():N}.gray");
         try
@@ -79,7 +83,7 @@ public sealed partial class Ffmpeg(string ffmpegPath, string ffprobePath)
             await ProcessRunner.RunCheckedAsync(FfmpegPath,
             [
                 "-v", "error", "-y", "-ss", atSeconds.ToString("0.###", CultureInfo.InvariantCulture), "-i", video,
-                "-frames:v", "1", "-vf", $"scale={width}:{height}", "-f", "rawvideo", "-pix_fmt", "gray", tmp,
+                "-frames:v", "1", "-vf", $"scale={width}:{height}", "-f", "rawvideo", "-pix_fmt", pixFmt, tmp,
             ], ct: ct).ConfigureAwait(false);
             return (await File.ReadAllBytesAsync(tmp, ct).ConfigureAwait(false), width, height);
         }

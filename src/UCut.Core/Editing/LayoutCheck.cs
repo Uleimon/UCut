@@ -22,17 +22,31 @@ public static class LayoutChecker
 
     /// <param name="frameEdges">Cam edge found in each sample frame (null = none in that frame).</param>
     /// <param name="logoHeight">Height of the logo as a fraction of the video height.</param>
-    public static LayoutDecision Decide(IReadOnlyList<double?> frameEdges, bool reframed, ReframeMode reframeMode,
+    public static LayoutDecision Decide(IReadOnlyList<double?> frameEdges, ReframePlan? reframe,
                                         LogoSettings logo, CaptionSettings captions, double logoHeight)
     {
         var notes = new List<string>();
         var captionY = captions.VerticalPosition;
         var defaultLogoY = logo.CenterY ?? 0.33;
 
-        if (reframed)
+        if (reframe is { Mode: ReframeMode.Split, Cam: not null })
         {
-            notes.Add(reframeMode == ReframeMode.Crop
-                ? "Querformat zugeschnitten: eine Cam am Rand kann dabei wegfallen (mit reframe.mode = blur bleibt das ganze Bild sichtbar)"
+            // We built the layout ourselves, so the cam edge is known exactly.
+            var seam = (double)reframe.CamStripHeight / reframe.TargetHeight;
+            notes.Add($"Cam im Querformat gefunden ({reframe.Cam}), oben platziert bis {seam:P0}, Spiel darunter");
+            var y = Math.Max(logoHeight / 2, seam - logoHeight * 0.55);
+            if (captionY < seam + CaptionGapBelowCam)
+            {
+                captionY = Math.Min(0.85, seam + CaptionGapBelowCam);
+            }
+
+            return new LayoutDecision("Cam oben, Spiel unten", seam, false, y, captionY, notes);
+        }
+
+        if (reframe is not null)
+        {
+            notes.Add(reframe.Mode == ReframeMode.Crop
+                ? "Querformat zugeschnitten (keine Cam gefunden): eine Cam am Rand kann dabei wegfallen. Mit reframe.camRect lässt sich ihre Position fest einstellen"
                 : "Querformat mit unscharfem Hintergrund, ganzes Bild sichtbar");
             return new LayoutDecision("Querformat umgewandelt", null, false, defaultLogoY, captionY, notes);
         }

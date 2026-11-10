@@ -31,7 +31,7 @@ public class ReframeAndImportTests
     [Fact]
     public void Zuschneiden_nimmt_einen_9_16_Ausschnitt_an_der_gewaehlten_Stelle()
     {
-        var plan = Reframer.Plan(1920, 1080, new ReframeSettings { FocusX = 0.25 })!;
+        var plan = Reframer.Plan(1920, 1080, new ReframeSettings { Mode = ReframeMode.Crop, FocusX = 0.25 })!;
         Assert.Equal("[0:v]crop=w=trunc(ih*1080/1920/2)*2:h=ih:x=(iw-ow)*0.25:y=0,scale=1080:1920,setsar=1[v1]", plan.Filter("[0:v]", "[v1]"));
     }
 
@@ -102,5 +102,33 @@ public class ReframeAndImportTests
         {
             File.Delete(file);
         }
+    }
+
+    [Fact]
+    public void Split_ohne_gefundene_Cam_faellt_auf_Zuschneiden_zurueck()
+    {
+        Assert.Equal(ReframeMode.Crop, Reframer.Plan(1920, 1080, new ReframeSettings())!.Mode);
+        Assert.Equal(ReframeMode.Blur, Reframer.Plan(1920, 1080, new ReframeSettings { FallbackMode = ReframeMode.Blur })!.Mode);
+    }
+
+    [Fact]
+    public void Split_setzt_Cam_oben_und_Spiel_darunter()
+    {
+        // Cam 480x284 bottom right in 1920x1080 -> strip 1080x640 on top, game 1080x1280 below.
+        var plan = Reframer.Plan(1920, 1080, new ReframeSettings(), new NormRect(1416 / 1920.0, 772 / 1080.0, 480 / 1920.0, 284 / 1080.0))!;
+        Assert.Equal(ReframeMode.Split, plan.Mode);
+        Assert.Equal(640, plan.CamStripHeight);
+        var f = plan.Filter("[0:v]", "[v1]");
+        Assert.Contains("[rf_cam]crop=480:284:1416:772,scale=1080:640", f, StringComparison.Ordinal);
+        Assert.Contains("scale=1080:1280", f, StringComparison.Ordinal);
+        Assert.EndsWith("vstack=inputs=2[v1]", f, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Sehr_hohe_Cam_wird_auf_die_maximale_Hoehe_begrenzt()
+    {
+        var plan = Reframer.Plan(1920, 1080, new ReframeSettings(), new NormRect(0, 0, 0.25, 0.6))!;
+        Assert.Equal(864, plan.CamStripHeight); // 45 % of 1920
+        Assert.Contains("crop=480:384:0:132", plan.Filter("[0:v]", "[v1]"), StringComparison.Ordinal);
     }
 }

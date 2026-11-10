@@ -115,10 +115,25 @@ public sealed class ReframeSettings
 {
     public bool Enabled { get; set; } = true;
 
-    /// <summary>crop = fill the screen and cut the sides away, blur = whole picture with blurred background.</summary>
-    public UCut.Editing.ReframeMode Mode { get; set; } = UCut.Editing.ReframeMode.Crop;
+    /// <summary>
+    /// split = find the cam, put it on top and the game below; crop = fill the screen and cut the sides away;
+    /// blur = whole picture with blurred background.
+    /// </summary>
+    public UCut.Editing.ReframeMode Mode { get; set; } = UCut.Editing.ReframeMode.Split;
 
-    /// <summary>For crop: which part stays (0 = left, 0.5 = middle, 1 = right).</summary>
+    /// <summary>What split does when no cam is found: crop or blur.</summary>
+    public UCut.Editing.ReframeMode FallbackMode { get; set; } = UCut.Editing.ReframeMode.Crop;
+
+    /// <summary>
+    /// Fixed cam position in your landscape layout (fractions of the picture). Null = find it automatically in every clip.
+    /// Example bottom right: { "x": 0.74, "y": 0.72, "width": 0.25, "height": 0.26 }.
+    /// </summary>
+    public UCut.Editing.NormRect? CamRect { get; set; }
+
+    /// <summary>The cam strip on top takes at most this share of the height.</summary>
+    public double MaxCamHeight { get; set; } = 0.45;
+
+    /// <summary>For crop and the game part of split: which part stays (0 = left, 0.5 = middle, 1 = right).</summary>
     public double FocusX { get; set; } = 0.5;
 
     public int TargetWidth { get; set; } = 1080;
