@@ -96,6 +96,14 @@ public sealed class LogoSettings
     public double? CenterY { get; set; } = 0.312;
 
     /// <summary>
+    /// Where the lower edge of the facecam (incl. name plate) is in Ulei's layout, as a fraction of the height.
+    /// Every clip is checked against it: if the clip's cam edge is elsewhere, the logo moves to the real edge and nothing is painted over.
+    /// </summary>
+    public double ExpectedCamEdge { get; set; } = 0.331;
+
+    public double CamEdgeTolerance { get; set; } = 0.03;
+
+    /// <summary>
     /// Optional box (fractions of the video size) painted over before the logo is drawn,
     /// so an old name like KREATIVLOS cannot shine through.
     /// </summary>

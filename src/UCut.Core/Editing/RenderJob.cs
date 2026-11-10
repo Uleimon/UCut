@@ -14,7 +14,8 @@ public sealed record RenderJob(
     string? LogoPath,
     LogoSettings Logo,
     double? LogoCenterYOverride,
-    ReframePlan? Reframe = null);
+    ReframePlan? Reframe = null,
+    bool UseCover = true);
 
 public static class RenderCommand
 {
@@ -48,8 +49,8 @@ public static class RenderCommand
             current = n;
         }
 
-        // The cover box belongs to the vertical Aitum layout; a reframed clip has no name plate at that spot.
-        if (useLogo && job.Reframe is null && job.Logo.Cover is { } cover)
+        // The cover box belongs to Ulei's vertical layout; reframed clips and clips with another layout have no name plate there.
+        if (useLogo && job.UseCover && job.Reframe is null && job.Logo.Cover is { } cover)
         {
             var n = Next();
             filters.Add($"{current}drawbox=x={Px(cover.X, job.Width)}:y={Px(cover.Y, job.Height)}:w={Px(cover.Width, job.Width)}:h={Px(cover.Height, job.Height)}:color=0x{cover.Color.TrimStart('#')}:t=fill{n}");

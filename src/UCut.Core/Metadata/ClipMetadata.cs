@@ -21,6 +21,7 @@ public sealed class ClipMetadata
     public string Transcript { get; set; } = "";
     public ScoreInfo Score { get; set; } = new();
     public FunninessInfo? Funniness { get; set; }
+    public LayoutInfo? Layout { get; set; }
     public string TextSource { get; set; } = "";
     public TikTokInfo TikTok { get; set; } = new();
     public YouTubeInfo YouTube { get; set; } = new();
@@ -83,6 +84,17 @@ public sealed class ScorePartInfo
     public int Points { get; set; }
     public int Max { get; set; }
     public string Note { get; set; } = "";
+}
+
+public sealed class LayoutInfo
+{
+    /// <summary>passt, angepasst, automatisch, keine Cam erkannt, Querformat umgewandelt.</summary>
+    public string Status { get; set; } = "";
+
+    /// <summary>Lower edge of the facecam as a fraction of the height.</summary>
+    public double? CamEdge { get; set; }
+
+    public List<string> Notes { get; set; } = [];
 }
 
 public sealed class FunninessInfo

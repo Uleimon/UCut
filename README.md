@@ -27,6 +27,19 @@ UCut prüft dabei jeden Clip:
 - **Hochformat:** bleibt wie es ist.
 - **Spiel:** Ein frischer Clip (jünger als 15 Minuten) bekommt das Spiel, das gerade läuft. Ältere Clips landen in `Unsortiert`, außer du gibst `--game` an.
 
+## Layout-Prüfung
+
+Jeder Clip wird gegen dein Layout geprüft (Cam oben, Namensleiste darunter, Spiel unten). UCut sucht dazu in drei Standbildern die Unterkante der Cam:
+
+| Ergebnis | Was passiert |
+|---|---|
+| **passt** (Cam-Kante dort, wo `logo.expectedCamEdge` sagt) | Logo und Abdeckung der alten Namensleiste wie eingestellt |
+| **angepasst** (Cam größer oder kleiner) | Logo wandert an die echte Cam-Kante, nichts wird übermalt |
+| **keine Cam erkannt** | Logo an Standardposition, nichts wird übermalt |
+| **Querformat umgewandelt** | keine Abdeckung; beim Zuschneiden kann eine Cam am Rand wegfallen, `reframe.mode = blur` behält das ganze Bild |
+
+Untertitel werden immer unterhalb der Cam gehalten. Das Ergebnis steht im Log und in der Infodatei unter `layout`.
+
 Hochladen kommt im nächsten Schritt. Die Infodatei ist schon so aufgebaut, dass der Uploader sie 1:1 übernehmen kann.
 
 ## Einrichtung (Windows)
@@ -62,6 +75,7 @@ Die wichtigsten Felder in `settings.json`:
 - `captions`: Schriftart, Größe, Wörter pro Zeile, Farbe, Höhe im Bild.
 - `cut.maxDeadStartSeconds`: ab wie viel Stille am Anfang geschnitten wird (Standard 0,8 s).
 - `reframe`: was mit Clips passiert, die nicht hochkant sind (siehe oben).
+- `logo.expectedCamEdge`: wo bei deinem Layout die Cam endet (Standard 0,331 = 33 % der Höhe), `logo.camEdgeTolerance`: wie viel Abweichung noch als „passt“ gilt.
 - `logo`: Position und Größe als Anteil der Bildgröße. Die Standardwerte passen zum Layout aus deinem Beispielclip (Namensleiste unter der Cam). `cover` ist die Fläche, die vorher übermalt wird, damit der alte Name nicht durchscheint. Mit `"centerY": null` sucht UCut die Unterkante der Cam selbst. Mit `ucut preview` siehst du das Ergebnis sofort.
 - `games.twitchChannel`, `games.twitchClientId`, `games.twitchClientSecret`: für die Twitch-Kategorie. Eine App legst du unter <https://dev.twitch.tv/console/apps> an (Redirect-URL `http://localhost`, Kategorie „Application Integration“). Das Secret kann auch in der Umgebungsvariable `UCUT_TWITCH_SECRET` stehen.
 - `games.processes`: welches Programm zu welchem Spiel gehört (GTA, FiveM, Minecraft, Valorant ... sind schon drin).

@@ -71,7 +71,7 @@ public sealed class CaptionBuilder(CaptionSettings settings)
 
     private static bool EndsPhrase(string text) => text.Length > 0 && ".,?!…:;".Contains(text[^1], StringComparison.Ordinal);
 
-    public string BuildAss(Transcript transcript, int videoWidth, int videoHeight)
+    public string BuildAss(Transcript transcript, int videoWidth, int videoHeight, double? verticalPosition = null)
     {
         var ci = CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
@@ -90,7 +90,7 @@ public sealed class CaptionBuilder(CaptionSettings settings)
         sb.AppendLine("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text");
 
         var x = videoWidth / 2;
-        var y = (int)Math.Round(videoHeight * settings.VerticalPosition);
+        var y = (int)Math.Round(videoHeight * (verticalPosition ?? settings.VerticalPosition));
         var highlight = ToAssColor(settings.HighlightColor);
         foreach (var e in BuildEvents(transcript))
         {

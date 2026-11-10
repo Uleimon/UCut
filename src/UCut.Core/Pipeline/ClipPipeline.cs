@@ -58,29 +58,20 @@ public sealed class ClipPipeline(
                     : $"  Querformat ({info.Width}x{info.Height}): wird mit unscharfem Hintergrund ins Hochformat gesetzt");
             }
 
+            var logoPath = ResolveLogo();
+            var layout = await CheckLayoutAsync(sourceFile, cut, reframe, logoPath, outWidth, outHeight, ct).ConfigureAwait(false);
+            foreach (var note in layout.Notes)
+            {
+                log($"  Layout: {note}");
+            }
+
             string? assName = null;
             var withCaptions = settings.Captions.Enabled && clipTranscript.Words.Count > 0;
             if (withCaptions)
             {
                 assName = "captions.ass";
-                var ass = new CaptionBuilder(settings.Captions).BuildAss(clipTranscript, outWidth, outHeight);
+                var ass = new CaptionBuilder(settings.Captions).BuildAss(clipTranscript, outWidth, outHeight, layout.CaptionY);
                 await File.WriteAllTextAsync(Path.Combine(work.FullName, assName), ass, ct).ConfigureAwait(false);
-            }
-
-            var logoPath = ResolveLogo();
-            double? autoY = null;
-            if (logoPath is not null && reframe is null && settings.Logo.CenterY is null)
-            {
-                var edge = await DetectCamEdgeAsync(sourceFile, cut, ct).ConfigureAwait(false);
-                if (edge is { } e)
-                {
-                    autoY = LogoPlacement.CenterAboveEdge(e, logoPath, settings.Logo.WidthFraction, outWidth, outHeight);
-                    log($"  Cam-Kante bei {e:P0} der Höhe, Logo sitzt direkt darüber");
-                }
-                else
-                {
-                    log("  Cam-Kante nicht gefunden, Logo bei 1/3 der Höhe");
-                }
             }
 
             // Text first: the title goes into the file name.
@@ -95,7 +86,7 @@ public sealed class ClipPipeline(
             Directory.CreateDirectory(Path.GetDirectoryName(output)!);
             var tmpOut = Path.Combine(work.FullName, "out.mp4");
 
-            var job = new RenderJob(Path.GetFullPath(sourceFile), tmpOut, cut, outWidth, outHeight, assName, logoPath, settings.Logo, autoY, reframe);
+            var job = new RenderJob(Path.GetFullPath(sourceFile), tmpOut, cut, outWidth, outHeight, assName, logoPath, settings.Logo, layout.LogoCenterY, reframe, layout.UseCover);
             log("  Video wird gerendert ...");
             await ProcessRunner.RunCheckedAsync(ffmpeg.FfmpegPath, RenderCommand.Build(job), work.FullName, ct).ConfigureAwait(false);
             File.Move(tmpOut, output);
@@ -105,6 +96,7 @@ public sealed class ClipPipeline(
 
             var meta = ClipMetadata.Create(output, Path.GetFullPath(sourceFile), game.FolderName, game.Source, cut.Duration, cut.Reason,
                                            clipTranscript.Text, score, text, now);
+            meta.Layout = new LayoutInfo { Status = layout.Status, CamEdge = layout.CamEdge, Notes = [.. layout.Notes] };
             var metaPath = Path.ChangeExtension(output, ".json");
             meta.Save(metaPath);
 
@@ -150,19 +142,27 @@ public sealed class ClipPipeline(
         return Path.GetFullPath(path);
     }
 
-    private async Task<double?> DetectCamEdgeAsync(string video, CutPlan cut, CancellationToken ct)
+    private async Task<LayoutDecision> CheckLayoutAsync(string video, CutPlan cut, ReframePlan? reframe, string? logoPath,
+                                                         int outWidth, int outHeight, CancellationToken ct)
     {
-        // Look at three frames; take the edge that is found most often.
-        var edges = new List<double>();
-        foreach (var f in new[] { 0.25, 0.5, 0.75 })
+        var logoHeight = 0.05;
+        if (logoPath is not null)
         {
-            var (px, w, h) = await ffmpeg.GrabGrayFrameAsync(video, cut.Start + cut.Duration * f, 90, 160, ct).ConfigureAwait(false);
-            if (CamEdgeDetector.FindEdge(px, w, h) is { } e)
+            var (lw, lh) = LogoPlacement.ReadPngSize(logoPath);
+            logoHeight = settings.Logo.WidthFraction * outWidth * lh / lw / outHeight;
+        }
+
+        var edges = new List<double?>();
+        if (reframe is null)
+        {
+            // Look at three moments of the clip; the cam frame stays put while the game picture moves.
+            foreach (var f in new[] { 0.25, 0.5, 0.75 })
             {
-                edges.Add(Math.Round(e, 2));
+                var (px, w, h) = await ffmpeg.GrabGrayFrameAsync(video, cut.Start + cut.Duration * f, 90, 160, ct).ConfigureAwait(false);
+                edges.Add(CamEdgeDetector.FindEdge(px, w, h));
             }
         }
 
-        return edges.Count == 0 ? null : edges.GroupBy(e => e).OrderByDescending(g => g.Count()).First().Key;
+        return LayoutChecker.Decide(edges, reframe is not null, settings.Reframe.Mode, settings.Logo, settings.Captions, logoHeight);
     }
 }
