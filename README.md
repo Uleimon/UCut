@@ -27,6 +27,28 @@ UCut prüft dabei jeden Clip:
 - **Hochformat:** bleibt wie es ist.
 - **Spiel:** Ein frischer Clip (jünger als 15 Minuten) bekommt das Spiel, das gerade läuft. Ältere Clips landen in `Unsortiert`, außer du gibst `--game` an.
 
+## Alte Twitch-Clips laden
+
+`ucut twitch` holt deine Twitch-Clips seit 2020, sucht die lustigen heraus und macht sie fertig wie jeden anderen Clip (Cam oben, Untertitel, Logo, Texte, Ablage im Spielordner):
+
+1. **Suchen:** UCut fragt Twitch Monat für Monat nach allen Clips deines Kanals. Der Kanal behält seine ID, auch Clips aus der KREATIVLOS-Zeit sind dabei. Das Spiel kommt direkt aus dem Clip.
+2. **Vorsortieren:** Als lustig gilt ein Clip, wenn im Titel Wörter wie „XD“, „Ausraster“, „lol“ oder 😂 stehen (Liste in `twitchClips.funnyWords`) oder wenn er zum meistgesehenen Viertel gehört (`twitchClips.topViewsShare`). Die besten Kandidaten kommen zuerst.
+3. **Laden:** mit **yt-dlp** (`winget install yt-dlp.yt-dlp`). Die Originale bleiben in `UCut\_Twitch-Originale`.
+4. **Bewerten:** Nach dem Transkript bewertet Claude die Lustigkeit 0 bis 10 (braucht `ANTHROPIC_API_KEY`).
+5. **Übersicht:** `UCut\Twitch-Clips Übersicht.csv` listet alle geladenen Clips, lustigste zuerst, mit Datei und Twitch-Link. Öffnet sich direkt in Excel.
+
+Die Dateien heißen nach dem Aufnahmetag (`2020-07-03_211500_titel.mp4`), in der Infodatei steht unter `origin` der Twitch-Link und die Aufrufe. Schon geladene Clips merkt sich UCut in `twitch-clips.json` und überspringt sie beim nächsten Mal.
+
+| Aufruf | Was passiert |
+|---|---|
+| `ucut twitch --liste` | nur anzeigen, welche Clips geladen würden, und warum |
+| `ucut twitch` | alle lustig aussehenden Clips seit 2020 laden und verarbeiten |
+| `ucut twitch --max 20` | nur die 20 besten Kandidaten |
+| `ucut twitch --seit 2021-01-01 --bis 2021-12-31` | nur ein Zeitraum |
+| `ucut twitch --alle` | jeden Clip laden, ohne Vorsortierung |
+
+Dafür braucht UCut die Twitch-App aus den Einstellungen (`games.twitchChannel`, `games.twitchClientId`, `games.twitchClientSecret`, siehe unten).
+
 ## Layout-Prüfung
 
 Jeder Clip wird gegen dein Layout geprüft (Cam oben, Namensleiste darunter, Spiel unten). UCut sucht dazu in drei Standbildern die Unterkante der Cam:
@@ -46,7 +68,7 @@ Hochladen kommt im nächsten Schritt. Die Infodatei ist schon so aufgebaut, dass
 ## Einrichtung (Windows)
 
 1. **.NET 10** installieren (falls noch nicht da, wie bei UScan).
-2. **ffmpeg** installieren: `winget install Gyan.FFmpeg`, danach ein neues Terminal öffnen. Test: `ffmpeg -version`.
+2. **ffmpeg** installieren: `winget install Gyan.FFmpeg`, danach ein neues Terminal öffnen. Test: `ffmpeg -version`. Für alte Twitch-Clips zusätzlich `winget install yt-dlp.yt-dlp`.
 3. UCut bauen: `dotnet build -c Release` im Repo-Ordner. Das Programm liegt dann unter `src\UCut.Cli\bin\Release\net10.0\ucut.exe`.
 4. Einstellungen anlegen: `ucut init`. Das legt `%APPDATA%\UCut\settings.json` an.
 5. In der Datei mindestens `watchFolder` (Ausgabeordner von Aitum Vertical) und `outputFolder` prüfen.
@@ -64,6 +86,7 @@ Beim ersten Clip lädt UCut das Whisper-Modell herunter (Modell `medium`, ca. 1,
 | Videos auf `ucut.exe` ziehen | dasselbe per Drag & Drop |
 | `ucut preview <video>` | Standbild mit Logo und Beispiel-Untertiteln, um die Position einzustellen (`--out bild.png`) |
 | `ucut game` | zeigt, welches Spiel gerade erkannt wird |
+| `ucut twitch` | alte Twitch-Clips nach lustigen durchsuchen, laden und fertig machen (`--liste`, `--max`, `--seit`, `--bis`, `--alle`) |
 
 Alle Befehle nehmen `--settings <datei>` für eine andere Einstellungsdatei.
 
@@ -82,6 +105,7 @@ Die wichtigsten Felder in `settings.json`:
 - `games.processes`: welches Programm zu welchem Spiel gehört (GTA, FiveM, Minecraft, Valorant ... sind schon drin).
 - `games.aliases`: macht aus „Grand Theft Auto V“ den Ordner „GTA V“.
 - `games.hashtags`, `games.commonHashtags`: feste Hashtags pro Spiel und für alle Clips.
+- `twitchClips`: Zeitraum (`since`, `until`), `onlyFunny`, `topViewsShare`, `minViews`, `maxClips`, `funnyWords`, `ytDlpPath`, `downloadFolder`.
 - `writer.useClaude`: Titel, Hashtags und Lustigkeit von Claude. Braucht die Umgebungsvariable `ANTHROPIC_API_KEY` (API-Schlüssel von <https://console.anthropic.com>). Kosten: rund 2 Cent pro Clip. Ohne Schlüssel nimmt UCut den ersten Satz als Titel und die Hashtags aus den Einstellungen.
 
 ## Die Infodatei

@@ -25,6 +25,7 @@ public sealed class UCutSettings
     public ReframeSettings Reframe { get; set; } = new();
     public GameSettings Games { get; set; } = new();
     public WriterSettings Writer { get; set; } = new();
+    public TwitchClipSettings TwitchClips { get; set; } = new();
 
     internal static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -205,4 +206,40 @@ public sealed class WriterSettings
 
     /// <summary>Channel name used in descriptions.</summary>
     public string ChannelName { get; set; } = "Uleimon";
+}
+
+/// <summary>Old Twitch clips of the channel: search, pre-filter for funny ones, download and process (ucut twitch).</summary>
+public sealed class TwitchClipSettings
+{
+    /// <summary>Oldest clip date (yyyy-MM-dd).</summary>
+    public string Since { get; set; } = "2020-01-01";
+
+    /// <summary>Newest clip date (yyyy-MM-dd), empty = today.</summary>
+    public string Until { get; set; } = "";
+
+    /// <summary>Only load clips that look funny (title words or many views). false = load every clip.</summary>
+    public bool OnlyFunny { get; set; } = true;
+
+    /// <summary>Share of the most watched clips that always count as candidates (0.25 = top quarter).</summary>
+    public double TopViewsShare { get; set; } = 0.25;
+
+    /// <summary>Clips with fewer views are skipped.</summary>
+    public int MinViews { get; set; }
+
+    /// <summary>At most this many clips per run, best candidates first (0 = no limit).</summary>
+    public int MaxClips { get; set; }
+
+    /// <summary>Path to yt-dlp. "yt-dlp" means: take it from PATH.</summary>
+    public string YtDlpPath { get; set; } = "yt-dlp";
+
+    /// <summary>Where the original downloads are kept. Empty = outputFolder\_Twitch-Originale.</summary>
+    public string DownloadFolder { get; set; } = "";
+
+    /// <summary>Words in a clip title that hint at a funny moment (case does not matter).</summary>
+    public List<string> FunnyWords { get; set; } =
+    [
+        "lol", "xd", "haha", "hahaha", "lach", "lustig", "witzig", "fail", "wtf", "bruh", "rage", "ausraster", "eskal",
+        "digga", "alter", "bro", "cringe", "peinlich", "troll", "prank", "unnötig", "random", "sus", "omg", "nein",
+        "warum", "was zur", "😂", "🤣", "💀", "😭",
+    ];
 }

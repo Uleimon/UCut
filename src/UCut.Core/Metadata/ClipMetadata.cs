@@ -22,6 +22,9 @@ public sealed class ClipMetadata
     public ScoreInfo Score { get; set; } = new();
     public FunninessInfo? Funniness { get; set; }
     public LayoutInfo? Layout { get; set; }
+
+    /// <summary>Set for clips that were not recorded just now, e.g. old Twitch clips.</summary>
+    public OriginInfo? Origin { get; set; }
     public string TextSource { get; set; } = "";
     public TikTokInfo TikTok { get; set; } = new();
     public YouTubeInfo YouTube { get; set; } = new();
@@ -120,4 +123,14 @@ public sealed class YouTubeInfo
 public sealed class InstagramInfo
 {
     public string Caption { get; set; } = "";
+}
+
+public sealed class OriginInfo
+{
+    public string Platform { get; set; } = "";
+    public string Id { get; set; } = "";
+    public string Url { get; set; } = "";
+    public string Title { get; set; } = "";
+    public int Views { get; set; }
+    public DateTimeOffset RecordedAt { get; set; }
 }

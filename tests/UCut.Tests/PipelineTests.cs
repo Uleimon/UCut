@@ -93,7 +93,14 @@ public class PipelineTests
             var pipeline = new ClipPipeline(settings, new Ffmpeg("ffmpeg", "ffprobe"),
                 new FakeTranscriber(new Transcript([new Word("Hallo", 0.2, 0.8)])), new TemplateClipWriter(), _ => { });
 
-            var result = await pipeline.ProcessAsync(input, new GameResult("Unsortiert", null, "Test"));
+            var recorded = new DateTimeOffset(2020, 7, 3, 21, 15, 0, TimeSpan.Zero);
+            var origin = new ClipOrigin(recorded, "Twitch", "Clip1", "https://clips.twitch.tv/Clip1", "Alter Clip", 77);
+            var result = await pipeline.ProcessAsync(input, new GameResult("Unsortiert", null, "Test"), origin);
+
+            // Old Twitch clips are named after the day they were recorded and keep their link in the info file.
+            Assert.StartsWith(recorded.ToLocalTime().ToString("yyyy-MM-dd_HHmmss", System.Globalization.CultureInfo.InvariantCulture), Path.GetFileName(result.VideoPath), StringComparison.Ordinal);
+            Assert.Equal("https://clips.twitch.tv/Clip1", result.Metadata.Origin?.Url);
+            Assert.Equal(77, result.Metadata.Origin?.Views);
 
             var info = await new Ffmpeg("ffmpeg", "ffprobe").ProbeAsync(result.VideoPath);
             Assert.Equal((1080, 1920), (info.Width, info.Height));

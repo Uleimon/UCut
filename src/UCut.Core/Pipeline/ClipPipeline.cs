@@ -11,6 +11,9 @@ namespace UCut.Pipeline;
 
 public sealed record ClipResult(string VideoPath, string MetadataPath, ClipMetadata Metadata);
 
+/// <summary>Where a clip came from when it was not recorded just now (e.g. an old Twitch clip).</summary>
+public sealed record ClipOrigin(DateTimeOffset RecordedAt, string Platform, string Id, string Url, string Title, int Views);
+
 /// <summary>One clip from start to finish: transcript, cut, captions, logo, score, texts, info file.</summary>
 public sealed class ClipPipeline(
     UCutSettings settings,
@@ -22,7 +25,7 @@ public sealed class ClipPipeline(
 {
     private readonly TimeProvider _time = time ?? TimeProvider.System;
 
-    public async Task<ClipResult> ProcessAsync(string sourceFile, GameResult game, CancellationToken ct = default)
+    public async Task<ClipResult> ProcessAsync(string sourceFile, GameResult game, ClipOrigin? origin = null, CancellationToken ct = default)
     {
         var work = Directory.CreateTempSubdirectory("ucut-");
         try
@@ -91,7 +94,8 @@ public sealed class ClipPipeline(
             var text = await WriteTextAsync(context, ct).ConfigureAwait(false);
 
             var now = _time.GetLocalNow();
-            var output = OutputNaming.ClipPath(settings.OutputFolder, game.FolderName, now, text.Title);
+            // Old clips are named after the day they were recorded, so the game folder stays in order.
+            var output = OutputNaming.ClipPath(settings.OutputFolder, game.FolderName, origin?.RecordedAt.ToLocalTime() ?? now, text.Title);
             Directory.CreateDirectory(Path.GetDirectoryName(output)!);
             var tmpOut = Path.Combine(work.FullName, "out.mp4");
 
@@ -105,6 +109,14 @@ public sealed class ClipPipeline(
 
             var meta = ClipMetadata.Create(output, Path.GetFullPath(sourceFile), game.FolderName, game.Source, cut.Duration, cut.Reason,
                                            clipTranscript.Text, score, text, now);
+            if (origin is not null)
+            {
+                meta.Origin = new OriginInfo
+                {
+                    Platform = origin.Platform, Id = origin.Id, Url = origin.Url, Title = origin.Title, Views = origin.Views, RecordedAt = origin.RecordedAt,
+                };
+            }
+
             meta.Layout = new LayoutInfo { Status = layout.Status, CamEdge = layout.CamEdge, Notes = [.. layout.Notes] };
             var metaPath = Path.ChangeExtension(output, ".json");
             meta.Save(metaPath);
