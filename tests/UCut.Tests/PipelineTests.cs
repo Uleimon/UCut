@@ -69,4 +69,38 @@ public class PipelineTests
             dir.Delete(recursive: true);
         }
     }
+
+    [Theory]
+    [InlineData("crop")]
+    [InlineData("blur")]
+    public async Task Querformat_Clip_wird_ins_Hochformat_gebracht(string mode)
+    {
+        Assert.SkipUnless(HasFfmpeg(), "ffmpeg nicht installiert");
+        var dir = Directory.CreateTempSubdirectory("ucut-e2e-");
+        try
+        {
+            var input = Path.Combine(dir.FullName, "quer.mp4");
+            await ProcessRunner.RunCheckedAsync("ffmpeg",
+            [
+                "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30:duration=3",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=3", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", input,
+            ]);
+
+            var settings = new UCutSettings { OutputFolder = Path.Combine(dir.FullName, "out") };
+            settings.Logo.Path = Path.Combine(AppContext.BaseDirectory, "assets", "uleimon-logo.png");
+            settings.Captions.Font = "DejaVu Sans";
+            settings.Reframe.Mode = mode == "crop" ? UCut.Editing.ReframeMode.Crop : UCut.Editing.ReframeMode.Blur;
+            var pipeline = new ClipPipeline(settings, new Ffmpeg("ffmpeg", "ffprobe"),
+                new FakeTranscriber(new Transcript([new Word("Hallo", 0.2, 0.8)])), new TemplateClipWriter(), _ => { });
+
+            var result = await pipeline.ProcessAsync(input, new GameResult("Unsortiert", null, "Test"));
+
+            var info = await new Ffmpeg("ffmpeg", "ffprobe").ProbeAsync(result.VideoPath);
+            Assert.Equal((1080, 1920), (info.Width, info.Height));
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
 }

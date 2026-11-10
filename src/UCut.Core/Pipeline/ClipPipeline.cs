@@ -49,23 +49,32 @@ public sealed class ClipPipeline(
             var clipTranscript = transcript.Shift(-cut.Start);
             clipTranscript = new Transcript(clipTranscript.Words.Where(w => w.Start < cut.Duration).ToList());
 
+            var reframe = Reframer.Plan(info.Width, info.Height, settings.Reframe);
+            var (outWidth, outHeight) = reframe is null ? (info.Width, info.Height) : (reframe.TargetWidth, reframe.TargetHeight);
+            if (reframe is not null)
+            {
+                log(reframe.Mode == ReframeMode.Crop
+                    ? $"  Querformat ({info.Width}x{info.Height}): wird auf 9:16 zugeschnitten"
+                    : $"  Querformat ({info.Width}x{info.Height}): wird mit unscharfem Hintergrund ins Hochformat gesetzt");
+            }
+
             string? assName = null;
             var withCaptions = settings.Captions.Enabled && clipTranscript.Words.Count > 0;
             if (withCaptions)
             {
                 assName = "captions.ass";
-                var ass = new CaptionBuilder(settings.Captions).BuildAss(clipTranscript, info.Width, info.Height);
+                var ass = new CaptionBuilder(settings.Captions).BuildAss(clipTranscript, outWidth, outHeight);
                 await File.WriteAllTextAsync(Path.Combine(work.FullName, assName), ass, ct).ConfigureAwait(false);
             }
 
             var logoPath = ResolveLogo();
             double? autoY = null;
-            if (logoPath is not null && settings.Logo.CenterY is null)
+            if (logoPath is not null && reframe is null && settings.Logo.CenterY is null)
             {
                 var edge = await DetectCamEdgeAsync(sourceFile, cut, ct).ConfigureAwait(false);
                 if (edge is { } e)
                 {
-                    autoY = LogoPlacement.CenterAboveEdge(e, logoPath, settings.Logo.WidthFraction, info.Width, info.Height);
+                    autoY = LogoPlacement.CenterAboveEdge(e, logoPath, settings.Logo.WidthFraction, outWidth, outHeight);
                     log($"  Cam-Kante bei {e:P0} der Höhe, Logo sitzt direkt darüber");
                 }
                 else
@@ -86,7 +95,7 @@ public sealed class ClipPipeline(
             Directory.CreateDirectory(Path.GetDirectoryName(output)!);
             var tmpOut = Path.Combine(work.FullName, "out.mp4");
 
-            var job = new RenderJob(Path.GetFullPath(sourceFile), tmpOut, cut, info.Width, info.Height, assName, logoPath, settings.Logo, autoY);
+            var job = new RenderJob(Path.GetFullPath(sourceFile), tmpOut, cut, outWidth, outHeight, assName, logoPath, settings.Logo, autoY, reframe);
             log("  Video wird gerendert ...");
             await ProcessRunner.RunCheckedAsync(ffmpeg.FfmpegPath, RenderCommand.Build(job), work.FullName, ct).ConfigureAwait(false);
             File.Move(tmpOut, output);

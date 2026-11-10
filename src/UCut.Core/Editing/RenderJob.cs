@@ -3,7 +3,7 @@ using UCut.Settings;
 
 namespace UCut.Editing;
 
-/// <summary>Everything needed for the final ffmpeg run.</summary>
+/// <summary>Everything needed for the final ffmpeg run. Width/Height are the size of the OUTPUT video.</summary>
 public sealed record RenderJob(
     string Input,
     string Output,
@@ -13,7 +13,8 @@ public sealed record RenderJob(
     string? AssFileName,
     string? LogoPath,
     LogoSettings Logo,
-    double? LogoCenterYOverride);
+    double? LogoCenterYOverride,
+    ReframePlan? Reframe = null);
 
 public static class RenderCommand
 {
@@ -40,7 +41,15 @@ public static class RenderCommand
         var step = 0;
         string Next() => $"[v{++step}]";
 
-        if (useLogo && job.Logo.Cover is { } cover)
+        if (job.Reframe is { } reframe)
+        {
+            var n = Next();
+            filters.Add(reframe.Filter(current, n));
+            current = n;
+        }
+
+        // The cover box belongs to the vertical Aitum layout; a reframed clip has no name plate at that spot.
+        if (useLogo && job.Reframe is null && job.Logo.Cover is { } cover)
         {
             var n = Next();
             filters.Add($"{current}drawbox=x={Px(cover.X, job.Width)}:y={Px(cover.Y, job.Height)}:w={Px(cover.Width, job.Width)}:h={Px(cover.Height, job.Height)}:color=0x{cover.Color.TrimStart('#')}:t=fill{n}");

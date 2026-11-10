@@ -22,6 +22,7 @@ public sealed class UCutSettings
     public CaptionSettings Captions { get; set; } = new();
     public CutSettings Cut { get; set; } = new();
     public LogoSettings Logo { get; set; } = new();
+    public ReframeSettings Reframe { get; set; } = new();
     public GameSettings Games { get; set; } = new();
     public WriterSettings Writer { get; set; } = new();
 
@@ -99,6 +100,21 @@ public sealed class LogoSettings
     /// so an old name like KREATIVLOS cannot shine through.
     /// </summary>
     public CoverBox? Cover { get; set; } = new() { X = 0.363, Y = 0.295, Width = 0.255, Height = 0.032, Color = "#2B2122" };
+}
+
+/// <summary>What happens with clips that are not vertical (e.g. 16:9 clips you load into UCut yourself).</summary>
+public sealed class ReframeSettings
+{
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>crop = fill the screen and cut the sides away, blur = whole picture with blurred background.</summary>
+    public UCut.Editing.ReframeMode Mode { get; set; } = UCut.Editing.ReframeMode.Crop;
+
+    /// <summary>For crop: which part stays (0 = left, 0.5 = middle, 1 = right).</summary>
+    public double FocusX { get; set; } = 0.5;
+
+    public int TargetWidth { get; set; } = 1080;
+    public int TargetHeight { get; set; } = 1920;
 }
 
 public sealed class CoverBox

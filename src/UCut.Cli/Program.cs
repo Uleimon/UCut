@@ -10,12 +10,19 @@ using UCut.Transcription;
 // Befehle:
 //   ucut init [--settings <datei>]                 Einstellungen anlegen
 //   ucut watch [--settings <datei>]                Ordner überwachen und jeden neuen Clip verarbeiten
-//   ucut process <video> [--game <name>] [...]     einen Clip verarbeiten
+//   ucut process <video|ordner>... [--game <name>]  eigene Clips verarbeiten (auch Drag & Drop auf ucut.exe)
 //   ucut preview <video> [--out <bild.png>] [...]  Standbild mit Logo und Beispiel-Untertitel zum Einstellen
 //   ucut game [...]                                aktuelles Spiel anzeigen
 
 var arguments = args.ToList();
 var settingsPath = TakeOption(arguments, "--settings") ?? SettingsStore.DefaultPath;
+// Drag & drop onto ucut.exe: Windows starts it with the dropped paths as arguments.
+var droppedFiles = arguments.Count > 0 && (File.Exists(arguments[0]) || Directory.Exists(arguments[0]));
+if (droppedFiles)
+{
+    arguments.Insert(0, "process");
+}
+
 var command = arguments.Count > 0 ? arguments[0].ToLowerInvariant() : "help";
 
 void Log(string message) => Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
@@ -29,7 +36,18 @@ try
         case "watch":
             return await WatchAsync();
         case "process" when arguments.Count >= 2:
-            return await ProcessAsync(arguments[1], TakeOption(arguments, "--game"));
+        {
+            var gameOption = TakeOption(arguments, "--game");
+            var code = await ProcessManyAsync(arguments.Skip(1).ToList(), gameOption);
+            if (droppedFiles && !Console.IsInputRedirected)
+            {
+                Console.WriteLine();
+                Console.WriteLine("Fertig. Taste drücken zum Schließen ...");
+                Console.ReadKey(intercept: true);
+            }
+
+            return code;
+        }
         case "preview" when arguments.Count >= 2:
             return await PreviewAsync(arguments[1], TakeOption(arguments, "--out") ?? "ucut-vorschau.png");
         case "game":
@@ -87,15 +105,40 @@ int Init()
     return (s, ffmpeg, pipeline, games);
 }
 
-async Task<int> ProcessAsync(string video, string? gameOverride)
+async Task<int> ProcessManyAsync(IReadOnlyList<string> inputs, string? gameOverride)
 {
     using var http = new HttpClient();
     var (s, _, pipeline, games) = Build(http);
-    var game = gameOverride is null
-        ? await games.DetectAsync()
-        : new GameResult(GameDetector.ToFolderName(gameOverride, s.Games), gameOverride, "Kommandozeile");
-    await pipeline.ProcessAsync(video, game);
-    return 0;
+    var files = ClipImport.Collect(inputs, out var missing);
+    foreach (var m in missing)
+    {
+        Log($"Nicht gefunden oder kein Video: {m}");
+    }
+
+    if (files.Count == 0)
+    {
+        Log("Keine Videos zum Verarbeiten gefunden (.mp4, .mkv, .mov).");
+        return 1;
+    }
+
+    Log($"{files.Count} Clip(s) werden verarbeitet.");
+    var failed = 0;
+    foreach (var file in files)
+    {
+        try
+        {
+            var game = await ClipImport.ChooseGameAsync(file, gameOverride, s.Games, games, DateTime.Now);
+            await pipeline.ProcessAsync(file, game);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or InvalidDataException)
+        {
+            failed++;
+            Log($"Fehler bei {Path.GetFileName(file)}: {ex.Message}");
+        }
+    }
+
+    Log(failed == 0 ? "Alle Clips fertig." : $"{files.Count - failed} fertig, {failed} mit Fehler.");
+    return failed == 0 ? 0 : 1;
 }
 
 async Task<int> WatchAsync()
@@ -198,7 +241,9 @@ static void PrintHelp() => Console.WriteLine(
 
       ucut init                      Einstellungen anlegen (%APPDATA%\UCut\settings.json)
       ucut watch                     Aitum-Ordner überwachen, jeder neue Clip wird automatisch verarbeitet
-      ucut process <video>           einen Clip verarbeiten (--game "GTA V" setzt das Spiel von Hand)
+      ucut process <video|ordner>... eigene Clips verarbeiten, auch mehrere oder ganze Ordner
+                                     (--game "GTA V" setzt das Spiel von Hand)
+                                     Einfacher: Videos im Explorer auf ucut.exe ziehen.
       ucut preview <video>           Standbild mit Logo und Beispiel-Untertiteln (--out bild.png)
       ucut game                      zeigt, welches Spiel gerade erkannt wird
 
