@@ -110,4 +110,60 @@ public class PipelineTests
             dir.Delete(recursive: true);
         }
     }
+
+    [Fact]
+    public async Task Clip_wird_mit_korrigierten_Woertern_und_Cam_von_Hand_neu_gemacht()
+    {
+        Assert.SkipUnless(HasFfmpeg(), "ffmpeg nicht installiert");
+        var dir = Directory.CreateTempSubdirectory("ucut-e2e-");
+        try
+        {
+            var input = Path.Combine(dir.FullName, "quer.mp4");
+            await ProcessRunner.RunCheckedAsync("ffmpeg",
+            [
+                "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30:duration=4",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=4", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", input,
+            ]);
+
+            var settings = new UCutSettings { OutputFolder = Path.Combine(dir.FullName, "out") };
+            settings.Logo.Path = Path.Combine(AppContext.BaseDirectory, "assets", "uleimon-logo.png");
+            settings.Captions.Font = "DejaVu Sans";
+            settings.Reframe.Mode = UCut.Editing.ReframeMode.Crop;
+            var pipeline = new ClipPipeline(settings, new Ffmpeg("ffmpeg", "ffprobe"),
+                new FakeTranscriber(new Transcript([new Word("Kreis", 0.2, 0.8), new Word("leise", 0.9, 1.4)])), new TemplateClipWriter(), _ => { });
+            var first = await pipeline.ProcessAsync(input, new GameResult("GTA V", null, "Test"));
+            Assert.Equal("Crop", first.Metadata.Edit?.Mode);
+            Assert.Equal(["Kreis", "leise"], first.Metadata.Edit!.Words.Select(w => w.Text));
+            first.Metadata.YouTube.Title = "Von Hand geändert";
+            first.Metadata.Uploaded["YouTube: Uleimon"] = "https://youtube.com/shorts/x";
+
+            var cam = new UCut.Editing.NormRect(0.7, 0.65, 0.28, 0.3);
+            var words = first.Metadata.Edit.Words.Select(w => new Word(w.Text == "Kreis" ? "Krass" : w.Text, w.Start, w.End)).ToList();
+            var redo = await pipeline.ProcessAsync(input, new GameResult("GTA V", null, "Test"), null, new ProcessOptions
+            {
+                Mode = UCut.Editing.ReframeMode.Split,
+                Cam = cam,
+                Words = words,
+                Cut = new UCut.Editing.CutPlan(first.Metadata.Edit.CutStart, first.Metadata.Edit.CutEnd, null),
+                Previous = first.Metadata,
+                ReplacePath = first.VideoPath,
+            });
+
+            Assert.Equal(first.VideoPath, redo.VideoPath); // same file, replaced
+            Assert.Single(Directory.GetFiles(Path.GetDirectoryName(first.VideoPath)!, "*.mp4"));
+            Assert.Equal("Krass leise", redo.Metadata.Transcript);
+            Assert.Equal("Split", redo.Metadata.Edit?.Mode);
+            Assert.Equal(cam, redo.Metadata.Edit?.Cam);
+            Assert.Equal("Von Hand geändert", redo.Metadata.YouTube.Title); // texts kept
+            Assert.Equal("https://youtube.com/shorts/x", redo.Metadata.Uploaded["YouTube: Uleimon"]);
+
+            // The cam set by hand is remembered for later clips.
+            var known = UCut.Editing.CamMemory.ForOutput(settings.OutputFolder).Candidates(1280, 720);
+            Assert.Equal(cam, known[0]);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
 }
