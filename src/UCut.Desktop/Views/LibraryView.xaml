@@ -159,11 +159,13 @@
         <Border Grid.Column="1" Width="420" Background="{StaticResource SidebarBrush}" Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="20" DataContext="{Binding Selected}">
-                    <Grid Height="460" Background="Black">
+                    <Grid Height="460" Background="Black" MouseLeftButtonDown="OnPlayerClick" ToolTip="Doppelklick: Vollbild">
                         <MediaElement x:Name="Player" Source="{Binding VideoUri}" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform"
                                       MediaOpened="OnMediaOpened" MediaEnded="OnMediaEnded"/>
                         <Button x:Name="PlayButton" Style="{StaticResource IconButton}" Content="&#xE769;" Click="OnPlayPause"
                                 HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Background="#AA000000"/>
+                        <Button Style="{StaticResource IconButton}" Content="&#xE740;" Click="OnFullscreen" ToolTip="Vollbild (oder Doppelklick aufs Video)"
+                                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Background="#AA000000"/>
                     </Grid>
                     <Slider x:Name="Seek" Margin="0,6,0,0" Minimum="0" Maximum="1" ValueChanged="OnSeek" IsMoveToPointEnabled="True" SmallChange="0.02" LargeChange="0.1"/>
 

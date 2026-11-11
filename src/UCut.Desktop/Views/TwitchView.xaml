@@ -122,13 +122,15 @@
                 Visibility="{Binding HasCurrent, Converter={StaticResource BoolToVis}}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="16">
-                    <Grid Height="214" Background="Black">
+                    <Grid Height="214" Background="Black" MouseLeftButtonDown="OnPlayerClick" ToolTip="Doppelklick: Vollbild">
                         <MediaElement x:Name="Player" Source="{Binding PreviewUri}" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform"
                                       MediaOpened="OnMediaOpened" MediaEnded="OnMediaEnded"/>
                         <TextBlock Text="{Binding PreviewStatus}" Foreground="White" TextWrapping="Wrap" TextAlignment="Center"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16"/>
                         <Button x:Name="PlayButton" Style="{StaticResource IconButton}" Content="&#xE769;" Click="OnPlayPause"
                                 HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Background="#AA000000"/>
+                        <Button Style="{StaticResource IconButton}" Content="&#xE740;" Click="OnFullscreen" ToolTip="Vollbild (oder Doppelklick aufs Video)"
+                                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Background="#AA000000"/>
                     </Grid>
                     <Slider x:Name="Seek" Margin="0,6,0,0" Minimum="0" Maximum="1" ValueChanged="OnSeek" IsMoveToPointEnabled="True" SmallChange="0.02" LargeChange="0.1"/>
                     <StackPanel DataContext="{Binding Current}">

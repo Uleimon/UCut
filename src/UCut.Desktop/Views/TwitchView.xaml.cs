@@ -103,4 +103,31 @@ public partial class TwitchView : UserControl
             Player.Position = TimeSpan.FromSeconds(Seek.Value * Player.NaturalDuration.TimeSpan.TotalSeconds);
         }
     }
+    private void OnPlayerClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            OnFullscreen(sender, e);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Plays the clip on the whole screen from the same spot and continues here where it stopped.</summary>
+    private void OnFullscreen(object sender, RoutedEventArgs e)
+    {
+        if (Player.Source is null)
+        {
+            return;
+        }
+
+        var wasPlaying = _playing;
+        Player.Pause();
+        SetPlaying(false);
+        Player.Position = FullscreenPlayer.Show(Window.GetWindow(this), Player.Source, Player.Position);
+        if (wasPlaying)
+        {
+            Player.Play();
+            SetPlaying(true);
+        }
+    }
 }

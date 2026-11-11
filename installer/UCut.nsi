@@ -52,6 +52,12 @@ Section "UCut" SecMain
   SectionIn RO
   ; A running UCut would lock its files.
   nsExec::Exec 'taskkill /IM UCut.exe /F'
+  nsExec::Exec 'taskkill /IM ucut-cli.exe /F'
+  Sleep 1000
+  ; A new version replaces the old one completely: the program folder is emptied first, so no old files stay behind.
+  ; Settings, accounts, clips and downloaded tools live elsewhere (%APPDATA%\UCut, %LOCALAPPDATA%\UCut, Videos) and stay.
+  IfFileExists "$INSTDIR\UCut.exe" 0 +2
+    RMDir /r "$INSTDIR"
   SetOutPath "$INSTDIR"
   File /r "${SOURCE}\*.*"
   WriteUninstaller "$INSTDIR\Deinstallieren.exe"
