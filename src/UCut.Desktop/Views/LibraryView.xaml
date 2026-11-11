@@ -202,6 +202,9 @@
                             <DockPanel Margin="0,0,0,6">
                                 <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8C8;" ToolTip="Kopieren" Margin="0" Padding="8,4"
                                         Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="tiktok"/>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="Hochladen" Margin="0,0,6,0" Padding="10,4"
+                                        ToolTip="Kopiert den Text, zeigt den Clip im Ordner und öffnet die Upload-Seite. Clip in den Browser ziehen, Text mit Strg+V einfügen."
+                                        Command="{Binding DataContext.UploadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="tiktok"/>
                                 <TextBlock Style="{StaticResource H2}" Text="TikTok" Margin="0"/>
                             </DockPanel>
                             <TextBox Style="{StaticResource SectionBox}" Text="{Binding TikTokCaption, UpdateSourceTrigger=PropertyChanged}" MinHeight="70"/>
@@ -212,6 +215,9 @@
                             <DockPanel Margin="0,0,0,6">
                                 <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8C8;" ToolTip="Kopieren" Margin="0" Padding="8,4"
                                         Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="youtube"/>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="Hochladen" Margin="0,0,6,0" Padding="10,4"
+                                        ToolTip="Kopiert den Text, zeigt den Clip im Ordner und öffnet die Upload-Seite. Clip in den Browser ziehen, Text mit Strg+V einfügen."
+                                        Command="{Binding DataContext.UploadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="youtube"/>
                                 <TextBlock Style="{StaticResource H2}" Text="YouTube Shorts" Margin="0"/>
                             </DockPanel>
                             <TextBlock Style="{StaticResource Subtle}" Text="Titel"/>
@@ -227,6 +233,9 @@
                             <DockPanel Margin="0,0,0,6">
                                 <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8C8;" ToolTip="Kopieren" Margin="0" Padding="8,4"
                                         Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="instagram"/>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="Hochladen" Margin="0,0,6,0" Padding="10,4"
+                                        ToolTip="Kopiert den Text, zeigt den Clip im Ordner und öffnet die Upload-Seite. Clip in den Browser ziehen, Text mit Strg+V einfügen."
+                                        Command="{Binding DataContext.UploadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="instagram"/>
                                 <TextBlock Style="{StaticResource H2}" Text="Instagram Reels" Margin="0"/>
                             </DockPanel>
                             <TextBox Style="{StaticResource SectionBox}" Text="{Binding InstagramCaption, UpdateSourceTrigger=PropertyChanged}" MinHeight="60"/>

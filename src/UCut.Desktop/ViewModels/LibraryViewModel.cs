@@ -103,6 +103,26 @@ internal sealed class LibraryViewModel : ObservableObject
             {
             }
         }, _ => Selected is not null);
+        UploadCommand = new RelayCommand(p =>
+        {
+            if (Selected is not { } c)
+            {
+                return;
+            }
+
+            // Half-automatic upload: text into the clipboard, clip shown in Explorer, upload page in the browser.
+            // The user drags the video into the page and pastes the text (Ctrl+V).
+            SaveSelected();
+            CopyCommand.Execute(p);
+            Shell.ShowInExplorer(c.Clip.VideoPath);
+            Shell.Open(p switch
+            {
+                "youtube" => "https://www.youtube.com/upload",
+                "instagram" => "https://www.instagram.com/",
+                _ => "https://www.tiktok.com/tiktokstudio/upload",
+            });
+            _main.Log.Write("Hochladen: Clip in den Browser ziehen, Text mit Strg+V einfügen.");
+        }, _ => Selected is not null);
         DeleteCommand = new RelayCommand(_ =>
         {
             if (Selected is { } c && _main.Dialogs.Confirm("Clip löschen", $"„{c.Title}“ wirklich löschen?\nVideo, Infodatei und Vorschaubild werden entfernt.", true))
@@ -125,6 +145,7 @@ internal sealed class LibraryViewModel : ObservableObject
     public RelayCommand EditCommand { get; }
     public RelayCommand SaveTextsCommand { get; }
     public RelayCommand CopyCommand { get; }
+    public RelayCommand UploadCommand { get; }
     public RelayCommand DeleteCommand { get; }
 
     public string Game { get => _game; set { if (Set(ref _game, value ?? AllGames)) { ApplyFilter(); } } }
