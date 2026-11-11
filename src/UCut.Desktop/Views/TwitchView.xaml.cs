@@ -10,6 +10,7 @@ public partial class TwitchView : UserControl
 {
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private bool _playing;
+    private bool _fromTimer;
     private TwitchViewModel? _vm;
 
     public TwitchView()
@@ -19,7 +20,9 @@ public partial class TwitchView : UserControl
         {
             if (Player.NaturalDuration.HasTimeSpan && !Seek.IsMouseCaptureWithin)
             {
+                _fromTimer = true;
                 Seek.Value = Player.Position.TotalSeconds / Math.Max(0.1, Player.NaturalDuration.TimeSpan.TotalSeconds);
+                _fromTimer = false;
             }
         };
         DataContextChanged += (_, _) =>
@@ -92,9 +95,10 @@ public partial class TwitchView : UserControl
         PlayButton.Content = playing ? "" : "";
     }
 
-    private void OnSeek(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    /// <summary>Any change of the slider by the user (click, drag, arrow keys) jumps there; changes from the timer don't.</summary>
+    private void OnSeek(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (Player.NaturalDuration.HasTimeSpan)
+        if (!_fromTimer && Player.NaturalDuration.HasTimeSpan)
         {
             Player.Position = TimeSpan.FromSeconds(Seek.Value * Player.NaturalDuration.TimeSpan.TotalSeconds);
         }
