@@ -132,7 +132,7 @@
                                         <TextBlock DockPanel.Dock="Right" Text="{Binding ExportProgress, Converter={StaticResource Pct}}"/>
                                         <TextBlock Text="Wird gerendert …"/>
                                     </DockPanel>
-                                    <ProgressBar Maximum="1" Value="{Binding ExportProgress}" Margin="0,6,0,6"/>
+                                    <ProgressBar Maximum="1" Value="{Binding ExportProgress, Mode=OneWay}" Margin="0,6,0,6"/>
                                     <Button Style="{StaticResource Danger}" Content="Abbrechen" Command="{Binding CancelExportCommand}" HorizontalAlignment="Left"/>
                                 </StackPanel>
                             </StackPanel>

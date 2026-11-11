@@ -85,7 +85,7 @@
                 <Button DockPanel.Dock="Right" Style="{StaticResource Danger}" Content="Abbrechen" Command="{Binding CancelJobCommand}" Margin="8,0,0,0"
                         Visibility="{Binding JobRunning, Converter={StaticResource BoolToVis}}"/>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Visibility="{Binding JobRunning, Converter={StaticResource BoolToVis}}">
-                    <ProgressBar Width="220" Maximum="1" Value="{Binding JobProgress}" VerticalAlignment="Center"/>
+                    <ProgressBar Width="220" Maximum="1" Value="{Binding JobProgress, Mode=OneWay}" VerticalAlignment="Center"/>
                 </StackPanel>
                 <TextBlock DockPanel.Dock="Left" Text="{Binding ToolWarning}" Foreground="{StaticResource WarnBrush}" Margin="0,0,16,0" VerticalAlignment="Center"
                            Visibility="{Binding ToolWarning, Converter={StaticResource NullToVis}}"/>
