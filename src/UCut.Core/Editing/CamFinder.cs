@@ -10,7 +10,11 @@ public static class CamFinder
     /// <summary>Minimum score for a rectangle to count as cam.</summary>
     internal const double MinScore = 0.45;
 
+    /// <summary>Minimum Verify score for a known cam position.</summary>
+    public const double VerifyMinScore = 0.45;
+
     private const int EdgeThreshold = 20;
+    private const int MinEdgeThreshold = 8;
     private const double StableShare = 0.75;
     private const int MaxLines = 40;
 
@@ -22,8 +26,31 @@ public static class CamFinder
             return null;
         }
 
+        var a = Analyze(frames, width, height);
+        return a.Search();
+    }
+
+    /// <summary>
+    /// Checks a cam position known from other clips: is there a moving picture with a (partly) stable frame or skin colour?
+    /// Used when the search finds nothing, e.g. in very dark games.
+    /// </summary>
+    public static double Verify(IReadOnlyList<byte[]> frames, int width, int height, NormRect cam)
+    {
+        if (frames.Count < 3 || frames.Any(f => f.Length < width * height * 3))
+        {
+            return 0;
+        }
+
+        return Analyze(frames, width, height).Check(cam);
+    }
+
+    private static Analysis Analyze(IReadOnlyList<byte[]> frames, int width, int height)
+    {
         int w = width, h = height, n = frames.Count;
         var gray = frames.Select(f => ToGray(f, w, h)).ToList();
+
+        // Dark games have weak edges everywhere: lower the edge threshold with the picture contrast.
+        var threshold = AdaptiveThreshold(gray[0]);
 
         // Stable edges: present in at least 75 % of the frames.
         var hEdge = new bool[(h - 1) * w]; // between row y and y+1
@@ -36,7 +63,7 @@ public static class CamFinder
             {
                 for (var x = 0; x < w; x++)
                 {
-                    if (Math.Abs(g[(y + 1) * w + x] - g[y * w + x]) > EdgeThreshold)
+                    if (Math.Abs(g[(y + 1) * w + x] - g[y * w + x]) > threshold)
                     {
                         hCount[y * w + x]++;
                     }
@@ -47,7 +74,7 @@ public static class CamFinder
             {
                 for (var x = 0; x < w - 1; x++)
                 {
-                    if (Math.Abs(g[y * w + x + 1] - g[y * w + x]) > EdgeThreshold)
+                    if (Math.Abs(g[y * w + x + 1] - g[y * w + x]) > threshold)
                     {
                         vCount[y * (w - 1) + x]++;
                     }
@@ -97,10 +124,30 @@ public static class CamFinder
 
         var motion = TemporalStd(gray, w, h);
         var skin = SkinMask(frames, w, h);
+        return new Analysis(w, h, rows, cols, hPrefix, vPrefix, motion, skin);
+    }
 
-        double HCov(int y, int x0, int x1) => y < 0 || y >= h - 1 ? 1 : (double)(hPrefix[y * (w + 1) + x1] - hPrefix[y * (w + 1) + x0]) / Math.Max(1, x1 - x0);
-        double VCov(int x, int y0, int y1) => x < 0 || x >= w - 1 ? 1 : (double)(vPrefix[y1 * (w - 1) + x] - vPrefix[y0 * (w - 1) + x]) / Math.Max(1, y1 - y0);
+    private sealed class Analysis(int w, int h, List<int> rows, List<int> cols, int[] hPrefix, int[] vPrefix, float[] motion, bool[] skin)
+    {
+        public double Check(NormRect cam)
+        {
+            int x0 = Math.Clamp((int)Math.Round(cam.X * w), 0, w - 1), y0 = Math.Clamp((int)Math.Round(cam.Y * h), 0, h - 1);
+            int x1 = Math.Clamp((int)Math.Round((cam.X + cam.Width) * w), x0 + 1, w), y1 = Math.Clamp((int)Math.Round((cam.Y + cam.Height) * h), y0 + 1, h);
 
+            // Best border coverage within ±2 px of each side (the stored rectangle is rounded).
+            double Side(Func<int, double> cov, int at, int min, int max) =>
+                Enumerable.Range(at - 2, 5).Where(v => v >= min && v <= max).Select(cov).DefaultIfEmpty(0).Max();
+            var top = Side(y => HCov(y, x0, x1), y0 - 1, -1, h - 1);
+            var bottom = Side(y => HCov(y, x0, x1), y1 - 1, -1, h - 1);
+            var left = Side(x => VCov(x, y0, y1), x0 - 1, -1, w - 1);
+            var right = Side(x => VCov(x, y0, y1), x1 - 1, -1, w - 1);
+            var cov = (top + bottom + left + right) / 4;
+            var (moving, skinShare) = Inside(motion, skin, w, x0, x1, y0, y1);
+            return (moving > 0.5 ? 1 : 0.2) * (0.5 * cov + Math.Min(skinShare, 0.1) * 5);
+        }
+
+        public NormRect? Search()
+        {
         double best = 0;
         NormRect? result = null;
         for (var i = 0; i < rows.Count; i++)
@@ -157,6 +204,24 @@ public static class CamFinder
         }
 
         return best >= MinScore ? result : null;
+        }
+
+        private double HCov(int y, int x0, int x1) => y < 0 || y >= h - 1 ? 1 : (double)(hPrefix[y * (w + 1) + x1] - hPrefix[y * (w + 1) + x0]) / Math.Max(1, x1 - x0);
+
+        private double VCov(int x, int y0, int y1) => x < 0 || x >= w - 1 ? 1 : (double)(vPrefix[y1 * (w - 1) + x] - vPrefix[y0 * (w - 1) + x]) / Math.Max(1, y1 - y0);
+    }
+
+    /// <summary>Half the median gradient-free contrast: 20 for normal pictures, down to 8 for dark ones.</summary>
+    private static int AdaptiveThreshold(float[] gray)
+    {
+        var sorted = gray.Where((_, i) => i % 7 == 0).Order().ToList();
+        if (sorted.Count == 0)
+        {
+            return EdgeThreshold;
+        }
+
+        var spread = sorted[(int)(sorted.Count * 0.9)] - sorted[(int)(sorted.Count * 0.1)];
+        return (int)Math.Clamp(spread / 6, MinEdgeThreshold, EdgeThreshold);
     }
 
     private static float[] ToGray(byte[] rgb, int w, int h)
@@ -209,7 +274,7 @@ public static class CamFinder
             var y = 0.299 * r + 0.587 * g + 0.114 * b;
             var cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
             var cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
-            mask[i] = cr is > 135 and < 180 && cb is > 85 and < 135 && y > 60;
+            mask[i] = cr is > 135 and < 180 && cb is > 85 and < 135 && y > 40;
         }
 
         return mask;

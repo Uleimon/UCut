@@ -30,6 +30,9 @@ public sealed class ClipMetadata
     public YouTubeInfo YouTube { get; set; } = new();
     public InstagramInfo Instagram { get; set; } = new();
 
+    /// <summary>Cut, layout and words of this clip, so it can be redone with corrections.</summary>
+    public EditInfo? Edit { get; set; }
+
     /// <summary>Filled by the uploader later: platform to post id/URL.</summary>
     public Dictionary<string, string> Uploaded { get; set; } = [];
 
@@ -133,4 +136,24 @@ public sealed class OriginInfo
     public string Title { get; set; } = "";
     public int Views { get; set; }
     public DateTimeOffset RecordedAt { get; set; }
+}
+
+public sealed class EditInfo
+{
+    public double CutStart { get; set; }
+    public double CutEnd { get; set; }
+
+    /// <summary>Split, Crop, Blur or empty (already vertical).</summary>
+    public string Mode { get; set; } = "";
+    public UCut.Editing.NormRect? Cam { get; set; }
+
+    /// <summary>Words in clip time (seconds after the cut).</summary>
+    public List<WordInfo> Words { get; set; } = [];
+}
+
+public sealed class WordInfo
+{
+    public string Text { get; set; } = "";
+    public double Start { get; set; }
+    public double End { get; set; }
 }

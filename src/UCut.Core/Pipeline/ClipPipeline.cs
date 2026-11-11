@@ -14,6 +14,31 @@ public sealed record ClipResult(string VideoPath, string MetadataPath, ClipMetad
 /// <summary>Where a clip came from when it was not recorded just now (e.g. an old Twitch clip).</summary>
 public sealed record ClipOrigin(DateTimeOffset RecordedAt, string Platform, string Id, string Url, string Title, int Views);
 
+/// <summary>
+/// Redo of a finished clip: keeps the cut, uses corrected words instead of a new transcript,
+/// forces the layout or a cam position set by hand, and replaces the existing file.
+/// </summary>
+public sealed record ProcessOptions
+{
+    /// <summary>Split (cam on top), Crop (no cam, fills the screen) or Blur. Null = as in the settings.</summary>
+    public ReframeMode? Mode { get; init; }
+
+    /// <summary>Cam position set by hand (fractions of the source picture).</summary>
+    public NormRect? Cam { get; init; }
+
+    /// <summary>Corrected words in clip time (after the cut). Null = transcribe again.</summary>
+    public IReadOnlyList<Word>? Words { get; init; }
+
+    /// <summary>Keep this cut (source seconds) instead of planning again.</summary>
+    public CutPlan? Cut { get; init; }
+
+    /// <summary>Info file of the clip being redone: its texts, uploads and origin are kept.</summary>
+    public ClipMetadata? Previous { get; init; }
+
+    /// <summary>Existing clip file to replace (same name and folder).</summary>
+    public string? ReplacePath { get; init; }
+}
+
 /// <summary>One clip from start to finish: transcript, cut, captions, logo, score, texts, info file.</summary>
 public sealed class ClipPipeline(
     UCutSettings settings,
@@ -25,7 +50,10 @@ public sealed class ClipPipeline(
 {
     private readonly TimeProvider _time = time ?? TimeProvider.System;
 
-    public async Task<ClipResult> ProcessAsync(string sourceFile, GameResult game, ClipOrigin? origin = null, CancellationToken ct = default)
+    public Task<ClipResult> ProcessAsync(string sourceFile, GameResult game, ClipOrigin? origin = null, CancellationToken ct = default) =>
+        ProcessAsync(sourceFile, game, origin, null, ct);
+
+    public async Task<ClipResult> ProcessAsync(string sourceFile, GameResult game, ClipOrigin? origin, ProcessOptions? options, CancellationToken ct = default)
     {
         var work = Directory.CreateTempSubdirectory("ucut-");
         try
@@ -34,7 +62,11 @@ public sealed class ClipPipeline(
             var info = await ffmpeg.ProbeAsync(sourceFile, ct).ConfigureAwait(false);
 
             var transcript = new Transcript([]);
-            if (info.HasAudio)
+            if (options?.Words is not null)
+            {
+                log("  Korrigierte Untertitel werden verwendet");
+            }
+            else if (info.HasAudio)
             {
                 var wav = Path.Combine(work.FullName, "audio.wav");
                 await ffmpeg.ExtractWhisperAudioAsync(sourceFile, wav, ct).ConfigureAwait(false);
@@ -43,28 +75,34 @@ public sealed class ClipPipeline(
                 log($"  Transkript: {(transcript.Words.Count == 0 ? "(keine Sprache)" : transcript.Text)}");
             }
 
-            var cut = CutPlanner.Plan(info.DurationSeconds, transcript, settings.Cut);
+            var cut = options?.Cut is { } keep && keep.End <= info.DurationSeconds + 0.5
+                ? keep
+                : CutPlanner.Plan(info.DurationSeconds, transcript, settings.Cut);
             if (cut.Reason is not null)
             {
                 log($"  Schnitt: {cut.Reason}");
             }
 
-            var clipTranscript = transcript.Shift(-cut.Start);
+            var clipTranscript = options?.Words is { } edited
+                ? new Transcript(edited.Where(w => w.Start < cut.Duration && w.Text.Trim().Length > 0).ToList())
+                : transcript.Shift(-cut.Start);
             clipTranscript = new Transcript(clipTranscript.Words.Where(w => w.Start < cut.Duration).ToList());
 
+            var reframeSettings = options?.Mode is { } forced ? WithMode(settings.Reframe, forced) : settings.Reframe;
             NormRect? cam = null;
-            if (Reframer.NeedsReframe(info.Width, info.Height, settings.Reframe) && settings.Reframe.Mode == ReframeMode.Split)
+            var camSource = "";
+            if (Reframer.NeedsReframe(info.Width, info.Height, reframeSettings) && reframeSettings.Mode == ReframeMode.Split)
             {
-                cam = settings.Reframe.CamRect ?? await FindCamAsync(sourceFile, cut, ct).ConfigureAwait(false);
+                (cam, camSource) = await LocateCamAsync(sourceFile, info.Width, info.Height, cut, options?.Cam, ct).ConfigureAwait(false);
             }
 
-            var reframe = Reframer.Plan(info.Width, info.Height, settings.Reframe, cam);
+            var reframe = Reframer.Plan(info.Width, info.Height, reframeSettings, cam);
             var (outWidth, outHeight) = reframe is null ? (info.Width, info.Height) : (reframe.TargetWidth, reframe.TargetHeight);
             if (reframe is not null)
             {
                 log(reframe.Mode switch
                 {
-                    ReframeMode.Split => $"  Querformat ({info.Width}x{info.Height}): Cam {(settings.Reframe.CamRect is null ? "gefunden" : "aus den Einstellungen")}, kommt nach oben, Spiel darunter",
+                    ReframeMode.Split => $"  Querformat ({info.Width}x{info.Height}): Cam {camSource}, kommt nach oben, Spiel darunter",
                     ReframeMode.Crop => $"  Querformat ({info.Width}x{info.Height}): wird auf 9:16 zugeschnitten",
                     _ => $"  Querformat ({info.Width}x{info.Height}): wird mit unscharfem Hintergrund ins Hochformat gesetzt",
                 });
@@ -91,18 +129,28 @@ public sealed class ClipPipeline(
                 clipTranscript.Text, game.FolderName, cut.Duration,
                 settings.Games.Hashtags.TryGetValue(game.FolderName, out var gameTags) ? gameTags : [],
                 settings.Games.CommonHashtags, settings.Writer.ChannelName);
-            var text = await WriteTextAsync(context, ct).ConfigureAwait(false);
+            var previous = options?.Previous;
+            var text = previous is null
+                ? await WriteTextAsync(context, ct).ConfigureAwait(false)
+                : FromPrevious(previous);
 
             var now = _time.GetLocalNow();
             // Old clips are named after the day they were recorded, so the game folder stays in order.
-            var output = OutputNaming.ClipPath(settings.OutputFolder, game.FolderName, origin?.RecordedAt.ToLocalTime() ?? now, text.Title);
+            var output = options?.ReplacePath is { Length: > 0 } replace
+                ? Path.GetFullPath(replace)
+                : OutputNaming.ClipPath(settings.OutputFolder, game.FolderName, origin?.RecordedAt.ToLocalTime() ?? now, text.Title);
             Directory.CreateDirectory(Path.GetDirectoryName(output)!);
             var tmpOut = Path.Combine(work.FullName, "out.mp4");
 
             var job = new RenderJob(Path.GetFullPath(sourceFile), tmpOut, cut, outWidth, outHeight, assName, logoPath, settings.Logo, layout.LogoCenterY, reframe, layout.UseCover);
             log("  Video wird gerendert ...");
             await ProcessRunner.RunCheckedAsync(ffmpeg.FfmpegPath, RenderCommand.Build(job), work.FullName, ct).ConfigureAwait(false);
-            File.Move(tmpOut, output);
+            File.Move(tmpOut, output, overwrite: true);
+            var thumb = Path.ChangeExtension(output, ".thumb.jpg");
+            if (File.Exists(thumb))
+            {
+                File.Delete(thumb);
+            }
 
             var loudness = await ffmpeg.MeasureLoudnessAsync(output, ct).ConfigureAwait(false);
             var score = ClipScorer.Score(cut.Duration, clipTranscript, loudness, withCaptions);
@@ -118,6 +166,22 @@ public sealed class ClipPipeline(
             }
 
             meta.Layout = new LayoutInfo { Status = layout.Status, CamEdge = layout.CamEdge, Notes = [.. layout.Notes] };
+            meta.Edit = new EditInfo
+            {
+                CutStart = cut.Start, CutEnd = cut.End,
+                Mode = reframe?.Mode.ToString() ?? "", Cam = reframe?.Cam,
+                Words = clipTranscript.Words.Select(w => new WordInfo { Text = w.Text, Start = Math.Round(w.Start, 3), End = Math.Round(w.End, 3) }).ToList(),
+            };
+            if (previous is not null)
+            {
+                meta.CreatedAt = previous.CreatedAt;
+                meta.Funniness = previous.Funniness;
+                meta.TextSource = previous.TextSource;
+                meta.Uploaded = previous.Uploaded;
+                meta.Instagram = previous.Instagram;
+                meta.Origin ??= previous.Origin;
+                meta.SourceFile = previous.SourceFile.Length > 0 ? previous.SourceFile : meta.SourceFile;
+            }
             var metaPath = Path.ChangeExtension(output, ".json");
             meta.Save(metaPath);
 
@@ -163,8 +227,21 @@ public sealed class ClipPipeline(
         return Path.GetFullPath(path);
     }
 
-    private async Task<NormRect?> FindCamAsync(string video, CutPlan cut, CancellationToken ct)
+    /// <summary>Cam by hand, from the settings, found in the picture, or a known position from earlier clips (in that order).</summary>
+    private async Task<(NormRect? Cam, string Source)> LocateCamAsync(string video, int width, int height, CutPlan cut, NormRect? manual, CancellationToken ct)
     {
+        var memory = CamMemory.ForOutput(settings.OutputFolder);
+        if (manual is not null)
+        {
+            memory.Remember(manual, width, height, weight: 5);
+            return (manual, "von Hand gesetzt");
+        }
+
+        if (settings.Reframe.CamRect is { } fixedCam)
+        {
+            return (fixedCam, "aus den Einstellungen");
+        }
+
         const int w = 320, h = 180, n = 8;
         var frames = new List<byte[]>();
         for (var i = 0; i < n; i++)
@@ -173,8 +250,29 @@ public sealed class ClipPipeline(
             frames.Add(px);
         }
 
-        return CamFinder.Find(frames, w, h);
+        if (CamFinder.Find(frames, w, h) is { } found)
+        {
+            memory.Remember(found, width, height);
+            return (found, "gefunden");
+        }
+
+        var best = memory.Candidates(width, height)
+            .Select(c => (Cam: c, Score: CamFinder.Verify(frames, w, h, c)))
+            .Where(c => c.Score >= CamFinder.VerifyMinScore)
+            .OrderByDescending(c => c.Score)
+            .FirstOrDefault();
+        return best.Cam is not null ? (best.Cam, "an einer bekannten Stelle aus früheren Clips gefunden") : (null, "");
     }
+
+    private static ReframeSettings WithMode(ReframeSettings s, ReframeMode mode) => new()
+    {
+        Enabled = true, Mode = mode, FallbackMode = s.FallbackMode, CamRect = s.CamRect, MaxCamHeight = s.MaxCamHeight,
+        FocusX = s.FocusX, TargetWidth = s.TargetWidth, TargetHeight = s.TargetHeight,
+    };
+
+    private static ClipText FromPrevious(ClipMetadata m) => new(
+        m.YouTube.Title, m.TikTok.Caption, m.YouTube.Title, m.YouTube.Description, m.YouTube.Tags.Select(t => "#" + t).ToList(),
+        m.Funniness?.Score, m.Funniness?.Reason, m.TextSource);
 
     private async Task<LayoutDecision> CheckLayoutAsync(string video, CutPlan cut, ReframePlan? reframe, string? logoPath,
                                                          int outWidth, int outHeight, CancellationToken ct)

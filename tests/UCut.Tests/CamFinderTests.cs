@@ -7,7 +7,7 @@ public class CamFinderTests
     private const int W = 320, H = 180;
 
     /// <summary>Moving "game" noise; optionally a cam with a fixed white frame and skin-coloured, slightly changing inside.</summary>
-    private static List<byte[]> Frames((int X, int Y, int W, int H)? cam, int seed = 1)
+    private static List<byte[]> Frames((int X, int Y, int W, int H)? cam, int seed = 1, bool dark = false)
     {
         var rnd = new Random(seed);
         var frames = new List<byte[]>();
@@ -20,7 +20,15 @@ public class CamFinderTests
                 {
                     // Game: smooth gradient that shifts every frame plus noise (no stable edges).
                     var v = (byte)Math.Clamp(((x + f * 23) % 160) + rnd.Next(30), 0, 255);
-                    Set(px, x, y, v, (byte)(v / 2 + 40), (byte)(255 - v));
+                    if (dark)
+                    {
+                        // Horror game at night: everything between 5 and 40.
+                        Set(px, x, y, (byte)(5 + v / 7), (byte)(5 + v / 8), (byte)(8 + v / 9));
+                    }
+                    else
+                    {
+                        Set(px, x, y, v, (byte)(v / 2 + 40), (byte)(255 - v));
+                    }
                 }
             }
 
@@ -33,12 +41,19 @@ public class CamFinderTests
                         var border = x < c.X + 2 || x >= c.X + c.W - 2 || y < c.Y + 2 || y >= c.Y + c.H - 2;
                         if (border)
                         {
-                            Set(px, x, y, 250, 250, 250);
+                            Set(px, x, y, dark ? (byte)70 : (byte)250, dark ? (byte)70 : (byte)250, dark ? (byte)70 : (byte)250);
                         }
                         else
                         {
                             var n = rnd.Next(12);
-                            Set(px, x, y, (byte)(200 + n), (byte)(150 + n), (byte)(120 + n)); // skin tone, camera noise
+                            if (dark)
+                            {
+                                Set(px, x, y, (byte)(110 + n), (byte)(78 + n), (byte)(62 + n)); // dim room
+                            }
+                            else
+                            {
+                                Set(px, x, y, (byte)(200 + n), (byte)(150 + n), (byte)(120 + n)); // skin tone, camera noise
+                            }
                         }
                     }
                 }
@@ -76,4 +91,21 @@ public class CamFinderTests
 
     [Fact]
     public void Zu_wenige_Bilder_kein_Treffer() => Assert.Null(CamFinder.Find(Frames((236, 129, 80, 46)).Take(2).ToList(), W, H));
+
+    [Fact]
+    public void Cam_wird_auch_in_dunklen_Spielen_gefunden()
+    {
+        var r = CamFinder.Find(Frames((236, 129, 80, 46), dark: true), W, H);
+        Assert.NotNull(r);
+        Assert.InRange(r.X * W, 233, 239);
+    }
+
+    [Fact]
+    public void Bekannte_Cam_Position_wird_bestaetigt_und_ohne_Cam_abgelehnt()
+    {
+        var known = new NormRect(236.0 / W, 129.0 / H, 80.0 / W, 46.0 / H);
+        Assert.True(CamFinder.Verify(Frames((236, 129, 80, 46), dark: true), W, H, known) >= CamFinder.VerifyMinScore);
+        Assert.True(CamFinder.Verify(Frames(null, dark: true), W, H, known) < CamFinder.VerifyMinScore);
+        Assert.True(CamFinder.Verify(Frames(null), W, H, known) < CamFinder.VerifyMinScore);
+    }
 }

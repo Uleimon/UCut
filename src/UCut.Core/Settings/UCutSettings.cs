@@ -105,6 +105,9 @@ public sealed class LogoSettings
 
     public double CamEdgeTolerance { get; set; } = 0.03;
 
+    /// <summary>Logo height (centre, fraction of the height) for clips without cam: near the top instead of in the middle of the game.</summary>
+    public double NoCamCenterY { get; set; } = 0.1;
+
     /// <summary>
     /// Optional box (fractions of the video size) painted over before the logo is drawn,
     /// so an old name like KREATIVLOS cannot shine through.

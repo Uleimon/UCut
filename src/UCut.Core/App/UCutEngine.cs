@@ -214,6 +214,40 @@ public sealed class UCutEngine : IDisposable
         return new TwitchSearchResult(candidates, clips.Count, clips.Count - fresh.Count);
     }
 
+    /// <summary>
+    /// Makes a finished clip again from its original: with corrected words, another layout or a cam set by hand.
+    /// Texts, uploads and the file name stay.
+    /// </summary>
+    public async Task<ClipResult> RedoAsync(UCut.Library.LibraryClip clip, ProcessOptions options, CancellationToken ct = default)
+    {
+        var meta = clip.Metadata;
+        var source = meta.SourceFile;
+        if (!File.Exists(source) && meta.Origin is { Platform: "Twitch" } o)
+        {
+            var twitch = Directory.Exists(TwitchDownloadFolder)
+                ? Directory.EnumerateFiles(TwitchDownloadFolder, "*" + o.Id + ".mp4").FirstOrDefault()
+                : null;
+            source = twitch ?? source;
+        }
+
+        if (!File.Exists(source))
+        {
+            throw new InvalidOperationException($"Das Original ist nicht mehr da ({meta.SourceFile}). Ohne Original kann der Clip nicht neu gemacht werden.");
+        }
+
+        var origin = meta.Origin is { } og ? new ClipOrigin(og.RecordedAt, og.Platform, og.Id, og.Url, og.Title, og.Views) : null;
+        var game = new GameResult(meta.Game, meta.Game, meta.GameSource);
+        var cut = meta.Edit is { CutEnd: > 0 } e ? new UCut.Editing.CutPlan(e.CutStart, e.CutEnd, meta.CutNote) : null;
+        Log.Write($"\"{clip.Title}\" wird neu gemacht ...");
+        var result = await Pipeline.ProcessAsync(source, game, origin, options with
+        {
+            Cut = options.Cut ?? cut,
+            Previous = meta,
+            ReplacePath = clip.VideoPath,
+        }, ct).ConfigureAwait(false);
+        return result;
+    }
+
     /// <summary>Folder for the original Twitch downloads (kept, so a preview is not downloaded twice).</summary>
     public string TwitchDownloadFolder => string.IsNullOrWhiteSpace(Settings.TwitchClips.DownloadFolder)
         ? Path.Combine(Settings.OutputFolder, "_Twitch-Originale")

@@ -49,7 +49,8 @@ public class LayoutTests
         var d = LayoutChecker.Decide([], Reframer.Plan(1920, 1080, new ReframeSettings { Mode = ReframeMode.Crop }), new LogoSettings(), new CaptionSettings(), LogoHeight);
         Assert.Equal("Querformat umgewandelt", d.Status);
         Assert.False(d.UseCover);
-        Assert.Contains(d.Notes, n => n.Contains("camRect", StringComparison.Ordinal));
+        Assert.Contains(d.Notes, n => n.Contains("Neu machen", StringComparison.Ordinal));
+        Assert.Equal(0.1, d.LogoCenterY, 3); // logo near the top, not in the middle of the game
     }
 
     [Fact]

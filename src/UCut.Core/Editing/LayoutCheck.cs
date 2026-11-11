@@ -46,9 +46,9 @@ public static class LayoutChecker
         if (reframe is not null)
         {
             notes.Add(reframe.Mode == ReframeMode.Crop
-                ? "Querformat zugeschnitten (keine Cam gefunden): eine Cam am Rand kann dabei wegfallen. Mit reframe.camRect lässt sich ihre Position fest einstellen"
+                ? "Querformat zugeschnitten (keine Cam gefunden): eine Cam am Rand kann dabei wegfallen. In der Galerie mit „Neu machen“ die Cam von Hand setzen"
                 : "Querformat mit unscharfem Hintergrund, ganzes Bild sichtbar");
-            return new LayoutDecision("Querformat umgewandelt", null, false, defaultLogoY, captionY, notes);
+            return new LayoutDecision("Querformat umgewandelt", null, false, Math.Max(logoHeight / 2, logo.NoCamCenterY), captionY, notes);
         }
 
         var edge = ConsistentEdge(frameEdges);
