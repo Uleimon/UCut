@@ -136,9 +136,38 @@ internal sealed class LibraryViewModel : ObservableObject
 
             // Half-automatic upload: text into the clipboard, clip shown in Explorer, upload page in the browser.
             // The user drags the video into the page and pastes the text (Ctrl+V).
+            // TikTok Studio and YouTube Studio take the file name as text, so a copy is named after the title/caption.
             SaveSelected();
             CopyCommand.Execute(p);
-            Shell.ShowInExplorer(c.Clip.VideoPath);
+            var nameText = p switch
+            {
+                "youtube" => c.YouTubeTitle,
+                "instagram" => c.Title,
+                _ => c.TikTokCaption,
+            };
+            if (p is "youtube")
+            {
+                // The title comes from the file name; the clipboard only needs what goes into the description.
+                try
+                {
+                    Clipboard.SetText($"{c.YouTubeDescription}\n\n{c.YouTubeTags}");
+                }
+                catch (System.Runtime.InteropServices.COMException)
+                {
+                }
+            }
+
+            var file = c.Clip.VideoPath;
+            try
+            {
+                file = UCut.Upload.UploadCopy.Create(c.Clip.VideoPath, nameText, System.IO.Path.Combine(System.IO.Path.GetTempPath(), "UCut-Hochladen"));
+            }
+            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+            {
+                _main.Log.Write($"Hochladen: Kopie mit Titel ging nicht ({ex.Message}), nehme die Originaldatei.");
+            }
+
+            Shell.ShowInExplorer(file);
             Shell.Open(p switch
             {
                 "youtube" => "https://www.youtube.com/upload",
@@ -146,6 +175,12 @@ internal sealed class LibraryViewModel : ObservableObject
                 _ => "https://www.tiktok.com/tiktokstudio/upload",
             });
             _main.Log.Write("Hochladen: Clip in den Browser ziehen, Text mit Strg+V einfügen.");
+            _main.Dialogs.Info("Hochladen", p switch
+            {
+                "youtube" => "1. Zieh die markierte Datei aus dem Explorer in YouTube Studio.\n2. Der Titel steht dann schon drin (die Datei heißt so).\n3. Klick in „Beschreibung“ und drück Strg+V. Da kommen Beschreibung und Hashtags rein.",
+                "instagram" => "1. Zieh die markierte Datei aus dem Explorer in Instagram.\n2. Klick in die Bildunterschrift und drück Strg+V.",
+                _ => "1. Zieh die markierte Datei aus dem Explorer in TikTok Studio.\n2. Die Beschreibung mit Hashtags steht dann schon drin (die Datei heißt so).\n3. Falls etwas fehlt: in „Beschreibung“ klicken, Strg+A, dann Strg+V.",
+            });
         }, _ => Selected is not null);
         RedoCommand = new RelayCommand(_ => Redo(), _ => Selected is not null && !_main.JobRunning);
         RecreateAllCommand = new RelayCommand(_ => RecreateAll(), _ => Clips.Count > 0 && !_main.JobRunning);
