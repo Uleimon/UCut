@@ -148,6 +148,7 @@ internal sealed class LibraryViewModel : ObservableObject
             _main.Log.Write("Hochladen: Clip in den Browser ziehen, Text mit Strg+V einfügen.");
         }, _ => Selected is not null);
         RedoCommand = new RelayCommand(_ => Redo(), _ => Selected is not null && !_main.JobRunning);
+        RecreateAllCommand = new RelayCommand(_ => RecreateAll(), _ => Clips.Count > 0 && !_main.JobRunning);
         UploadNowCommand = new AsyncCommand(UploadNowAsync, () => Selected is not null && !_main.JobRunning && UploadTargets.Any(t => t.IsChecked));
         ManageAccountsCommand = new RelayCommand(_ => _main.Page = "settings");
         DeleteCommand = new RelayCommand(_ =>
@@ -175,6 +176,7 @@ internal sealed class LibraryViewModel : ObservableObject
     public RelayCommand CopyCommand { get; }
     public RelayCommand UploadCommand { get; }
     public RelayCommand RedoCommand { get; }
+    public RelayCommand RecreateAllCommand { get; }
     public AsyncCommand UploadNowCommand { get; }
     public RelayCommand ManageAccountsCommand { get; }
     public ObservableCollection<UploadTarget> UploadTargets { get; } = [];
@@ -248,6 +250,31 @@ internal sealed class LibraryViewModel : ObservableObject
                 ? $"✓ {o.Account.Label}: {o.Result!.Note}"
                 : $"✗ {o.Account.Label}: {o.Error}");
             _main.Dialogs.Info("Hochladen", string.Join("\n\n", lines));
+        });
+    }
+
+    /// <summary>All clips shown right now (so a game filter recreates only that game), rendered again as they were.</summary>
+    private void RecreateAll()
+    {
+        SaveSelected();
+        var engine = _main.Engine;
+        var clips = Clips.Select(c => c.Clip).ToList();
+        var missing = clips.Count(c => engine.FindOriginal(c) is null);
+        var which = Game == AllGames && Search.Length == 0 ? "Alle" : "Alle angezeigten";
+        var text = $"{which} {clips.Count} Clips werden genau wie vorher neu gerendert (gleicher Schnitt, gleicher Aufbau, gleiche Wörter). "
+                 + "Titel, Texte und Uploads bleiben. Alte Clips bekommen dabei Wortzeiten, danach kannst du ihre Untertitel bearbeiten.\n\n"
+                 + (missing > 0 ? $"{missing} davon haben kein Original mehr und werden übersprungen.\n\n" : "")
+                 + "Das kann dauern (etwa so lange wie beim ersten Mal). Du kannst unten jederzeit abbrechen.";
+        if (!_main.Dialogs.Confirm("Recreate", text, false))
+        {
+            return;
+        }
+
+        _ = _main.RunJobAsync($"Recreate: {clips.Count} Clips", (progress, ct) => engine.RecreateAsync(clips, progress, ct), r =>
+        {
+            Selected = null;
+            _main.Dialogs.Info("Recreate", $"{r.Done} Clips neu gerendert" + (r.Failed > 0 ? $", {r.Failed} übersprungen (siehe Protokoll)." : ".")
+                                          + (r.Cancelled ? "\nAbgebrochen, der Rest ist unverändert." : ""));
         });
     }
 

@@ -260,6 +260,58 @@ public sealed class UCutEngine : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// "Recreate": renders the clips again from their originals, exactly as they were (same cut, layout, cam and words).
+    /// Clips from older versions without that info get a fresh transcript, so their words can be edited afterwards.
+    /// Texts, funniness and uploads stay. One failed clip does not stop the others.
+    /// </summary>
+    public async Task<BatchResult> RecreateAsync(IReadOnlyList<UCut.Library.LibraryClip> clips, IProgress<BatchProgress>? progress = null, CancellationToken ct = default)
+    {
+        var done = 0;
+        var failed = 0;
+        for (var i = 0; i < clips.Count; i++)
+        {
+            if (ct.IsCancellationRequested)
+            {
+                return new BatchResult(done, failed, true);
+            }
+
+            var clip = clips[i];
+            progress?.Report(new BatchProgress(i, clips.Count, clip.Title));
+            try
+            {
+                await RedoAsync(clip, SameAsBefore(clip.Metadata), ct).ConfigureAwait(false);
+                done++;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or IOException or InvalidDataException)
+            {
+                failed++;
+                Log.Write($"\"{clip.Title}\" übersprungen: {ex.Message}");
+            }
+        }
+
+        Log.Write($"Recreate fertig: {done} neu gerendert, {failed} übersprungen.");
+        return new BatchResult(done, failed, false);
+    }
+
+    /// <summary>Options that rebuild a clip the way it was made last time.</summary>
+    public static ProcessOptions SameAsBefore(UCut.Metadata.ClipMetadata meta)
+    {
+        var edit = meta.Edit;
+        if (edit is null)
+        {
+            return new ProcessOptions();
+        }
+
+        UCut.Editing.ReframeMode? mode = Enum.TryParse<UCut.Editing.ReframeMode>(edit.Mode, out var m) ? m : null;
+        return new ProcessOptions
+        {
+            Mode = mode,
+            Cam = mode == UCut.Editing.ReframeMode.Split ? edit.Cam : null,
+            Words = edit.Words.Count > 0 ? edit.Words.Select(w => new Word(w.Text, w.Start, w.End)).ToList() : null,
+        };
+    }
+
     /// <summary>Folder for the original Twitch downloads (kept, so a preview is not downloaded twice).</summary>
     public string TwitchDownloadFolder => string.IsNullOrWhiteSpace(Settings.TwitchClips.DownloadFolder)
         ? Path.Combine(Settings.OutputFolder, "_Twitch-Originale")

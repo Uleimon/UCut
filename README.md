@@ -15,11 +15,12 @@ Sobald Aitum Vertical einen Clip speichert, passiert Folgendes:
 
 ## Das Programm
 
-`UCut-Setup-0.4.0.exe` installiert UCut wie ein normales Programm (ohne Admin-Rechte, nach `%LOCALAPPDATA%\Programs\UCut`), mit eigenem Icon im Startmenü und auf dem Desktop. Eine neue Version einfach drüber installieren: das Setup schließt UCut, ersetzt den Programmordner komplett und lässt Einstellungen, Konten und Clips in Ruhe. Deinstallieren geht über *Einstellungen → Apps*.
+`UCut-Setup-0.4.1.exe` installiert UCut wie ein normales Programm (ohne Admin-Rechte, nach `%LOCALAPPDATA%\Programs\UCut`), mit eigenem Icon im Startmenü und auf dem Desktop. Eine neue Version einfach drüber installieren: das Setup schließt UCut, ersetzt den Programmordner komplett und lässt Einstellungen, Konten und Clips in Ruhe. Deinstallieren geht über *Einstellungen → Apps*.
 
 Fehlen ffmpeg oder yt-dlp, lädt UCut sie beim Start selbst nach `%LOCALAPPDATA%\UCut\tools` (einmalig, ohne Admin-Rechte).
 
 - **Clips:** Galerie aller fertigen Clips mit Vorschaubild, Filter nach Spiel, Sortierung (neueste, lustigste, Score) und Suche. Rechts läuft der Clip (Doppelklick: Vollbild), darunter stehen Titel und Hashtags pro Plattform zum Bearbeiten und Kopieren.
+- **Recreate:** alle angezeigten Clips genau wie vorher neu rendern (alte Clips bekommen dabei Wortzeiten).
 - **Create:** Clip neu machen mit Cam von Hand (Rechteck aufziehen), ohne Cam oder mit unscharfem Rand, und falsche Untertitel-Wörter korrigieren.
 - **Hochladen:** Konten in den Einstellungen verbinden (mehrere pro Plattform), dann pro Clip die Konten anhaken und hochladen. YouTube bekommt das Vorschaubild mit.
 - **Lacher und Trends:** UCut erkennt Lachen im Ton und im Transkript (fließt in die Lustigkeit ein und bestimmt das Vorschaubild) und holt mit Claude pro Spiel die Hashtags, die gerade beliebt sind (alle 3 Tage neu).

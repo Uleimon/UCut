@@ -32,6 +32,13 @@
                     </Border>
                     <Button Style="{StaticResource IconButton}" Content="&#xE72C;" ToolTip="Neu laden" Command="{Binding RefreshCommand}"/>
                     <Button Style="{StaticResource IconButton}" Content="&#xE838;" ToolTip="Ausgabeordner öffnen" Command="{Binding OpenOutputCommand}"/>
+                    <Button Command="{Binding RecreateAllCommand}" Margin="0,0,8,0"
+                            ToolTip="Alle angezeigten Clips genau wie vorher neu rendern (Filter nach Spiel wirkt mit)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" Margin="0,0,8,0"/>
+                            <TextBlock Text="Recreate"/>
+                        </StackPanel>
+                    </Button>
                     <Button Style="{StaticResource Primary}" Command="{Binding AddClipsCommand}" Margin="0">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE710;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/>
