@@ -54,7 +54,60 @@ internal sealed class ClipCard(LibraryClip clip) : ObservableObject
         ? "Noch nirgends hochgeladen."
         : string.Join("\n", Clip.Metadata.Uploaded.Select(u => $"{u.Key}: {u.Value}"));
 
-    public void RefreshUploads() => OnPropertyChanged(nameof(UploadedText));
+    private static readonly string[] Platforms = ["TikTok", "YouTube", "Instagram"];
+
+    public bool IsUploaded => Clip.Metadata.Uploaded.Count > 0;
+
+    public string UploadedPlatforms => "Hochgeladen auf: " + string.Join(", ",
+        Platforms.Where(HasUpload).DefaultIfEmpty("(anderswo)"));
+
+    /// <summary>Tick "hochgeladen" by hand (after uploading in the browser); upload by account sets it by itself.</summary>
+    public bool UploadedTikTok { get => HasUpload("TikTok"); set => MarkUploaded("TikTok", value); }
+    public bool UploadedYouTube { get => HasUpload("YouTube"); set => MarkUploaded("YouTube", value); }
+    public bool UploadedInstagram { get => HasUpload("Instagram"); set => MarkUploaded("Instagram", value); }
+
+    private bool HasUpload(string platform) => Clip.Metadata.Uploaded.Keys.Any(k => k.StartsWith(platform, StringComparison.OrdinalIgnoreCase));
+
+    private void MarkUploaded(string platform, bool on)
+    {
+        if (on == HasUpload(platform))
+        {
+            return;
+        }
+
+        if (on)
+        {
+            Clip.Metadata.Uploaded[$"{platform}: von Hand"] = "hochgeladen am " + DateTime.Now.ToString("dd.MM.yyyy HH:mm", System.Globalization.CultureInfo.GetCultureInfo("de-DE"));
+        }
+        else
+        {
+            foreach (var k in Clip.Metadata.Uploaded.Keys.Where(k => k.StartsWith(platform, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                Clip.Metadata.Uploaded.Remove(k);
+            }
+        }
+
+        try
+        {
+            Clip.Save();
+        }
+        catch (IOException)
+        {
+            Dirty = true;
+        }
+
+        RefreshUploads();
+    }
+
+    public void RefreshUploads()
+    {
+        OnPropertyChanged(nameof(UploadedText));
+        OnPropertyChanged(nameof(IsUploaded));
+        OnPropertyChanged(nameof(UploadedPlatforms));
+        OnPropertyChanged(nameof(UploadedTikTok));
+        OnPropertyChanged(nameof(UploadedYouTube));
+        OnPropertyChanged(nameof(UploadedInstagram));
+    }
 }
 
 /// <summary>A connected account in the upload box of the details panel.</summary>
@@ -160,7 +213,7 @@ internal sealed class LibraryViewModel : ObservableObject
             var file = c.Clip.VideoPath;
             try
             {
-                file = UCut.Upload.UploadCopy.Create(c.Clip.VideoPath, nameText, System.IO.Path.Combine(System.IO.Path.GetTempPath(), "UCut-Hochladen"));
+                file = UCut.Upload.UploadCopy.Create(c.Clip.VideoPath, nameText, UCut.Upload.UploadCopy.DefaultFolder);
             }
             catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
             {
@@ -177,15 +230,29 @@ internal sealed class LibraryViewModel : ObservableObject
             _main.Log.Write("Hochladen: Clip in den Browser ziehen, Text mit Strg+V einfügen.");
             _main.Dialogs.Info("Hochladen", p switch
             {
-                "youtube" => "1. Zieh die markierte Datei aus dem Explorer in YouTube Studio.\n2. Der Titel steht dann schon drin (die Datei heißt so).\n3. Klick in „Beschreibung“ und drück Strg+V. Da kommen Beschreibung und Hashtags rein.",
-                "instagram" => "1. Zieh die markierte Datei aus dem Explorer in Instagram.\n2. Klick in die Bildunterschrift und drück Strg+V.",
-                _ => "1. Zieh die markierte Datei aus dem Explorer in TikTok Studio.\n2. Die Beschreibung mit Hashtags steht dann schon drin (die Datei heißt so).\n3. Falls etwas fehlt: in „Beschreibung“ klicken, Strg+A, dann Strg+V.",
+                "youtube" => "1. Zieh die markierte Datei aus dem Explorer in YouTube Studio.\n2. Der Titel steht dann schon drin (die Datei heißt so).\n3. Klick in „Beschreibung“ und drück Strg+V. Da kommen Beschreibung und Hashtags rein.\n\nWenn es online ist: in UCut bei YouTube den Haken „Hochgeladen“ setzen.",
+                "instagram" => "1. Zieh die markierte Datei aus dem Explorer in Instagram.\n2. Klick in die Bildunterschrift und drück Strg+V.\n\nWenn es online ist: in UCut bei Instagram den Haken „Hochgeladen“ setzen.",
+                _ => "1. Zieh die markierte Datei aus dem Explorer in TikTok Studio.\n2. Die Beschreibung mit Hashtags steht dann schon drin (die Datei heißt so).\n3. Falls etwas fehlt: in „Beschreibung“ klicken, Strg+A, dann Strg+V.\n\nWenn es online ist: in UCut bei TikTok den Haken „Hochgeladen“ setzen.",
             });
         }, _ => Selected is not null);
         RedoCommand = new RelayCommand(_ => Redo(), _ => Selected is not null && !_main.JobRunning);
         RecreateAllCommand = new RelayCommand(_ => RecreateAll(), _ => Clips.Count > 0 && !_main.JobRunning);
         UploadNowCommand = new AsyncCommand(UploadNowAsync, () => Selected is not null && !_main.JobRunning && UploadTargets.Any(t => t.IsChecked));
         ManageAccountsCommand = new RelayCommand(_ => _main.Page = "settings");
+        ClearUploadFolderCommand = new RelayCommand(_ =>
+        {
+            var (deleted, locked) = UCut.Upload.UploadCopy.Clear(UCut.Upload.UploadCopy.DefaultFolder);
+            _main.Log.Write($"Hochlad-Ordner geleert: {deleted} Datei(en) gelöscht" + (locked > 0 ? $", {locked} noch offen." : "."));
+            _main.Dialogs.Info("Hochlad-Ordner", deleted == 0 && locked == 0
+                ? "Der Hochlad-Ordner ist schon leer."
+                : $"{deleted} Kopie(n) gelöscht. Deine Original-Clips bleiben, wo sie sind."
+                  + (locked > 0 ? $"\n\n{locked} Datei(en) sind noch offen (lädt der Browser sie noch hoch?). Danach nochmal drücken." : ""));
+        });
+        OpenUploadFolderCommand = new RelayCommand(_ =>
+        {
+            System.IO.Directory.CreateDirectory(UCut.Upload.UploadCopy.DefaultFolder);
+            Shell.Open(UCut.Upload.UploadCopy.DefaultFolder);
+        });
         DeleteCommand = new RelayCommand(_ =>
         {
             if (Selected is { } c && _main.Dialogs.Confirm("Clip löschen", $"„{c.Title}“ wirklich löschen?\nVideo, Infodatei und Vorschaubild werden entfernt.", true))
@@ -212,6 +279,8 @@ internal sealed class LibraryViewModel : ObservableObject
     public RelayCommand UploadCommand { get; }
     public RelayCommand RedoCommand { get; }
     public RelayCommand RecreateAllCommand { get; }
+    public RelayCommand ClearUploadFolderCommand { get; }
+    public RelayCommand OpenUploadFolderCommand { get; }
     public AsyncCommand UploadNowCommand { get; }
     public RelayCommand ManageAccountsCommand { get; }
     public ObservableCollection<UploadTarget> UploadTargets { get; } = [];

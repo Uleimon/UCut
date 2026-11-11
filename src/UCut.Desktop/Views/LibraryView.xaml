@@ -148,6 +148,11 @@
                                     <Border Style="{StaticResource Chip}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8">
                                         <TextBlock Text="{Binding DurationText}" FontSize="11"/>
                                     </Border>
+                                    <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Width="26" Height="26" CornerRadius="13"
+                                            Background="{StaticResource OkBrush}" ToolTip="{Binding UploadedPlatforms}"
+                                            Visibility="{Binding IsUploaded, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" Foreground="White" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
                                 </Grid>
                                 <StackPanel Margin="10,8,10,10">
                                     <TextBlock Text="{Binding Title}" FontWeight="SemiBold" ToolTip="{Binding Title}"/>
@@ -229,7 +234,14 @@
                                 <Button Style="{StaticResource Primary}" Command="{Binding UploadNowCommand}" Margin="0,0,8,0">
                                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE898;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="Auf ausgewählte Konten hochladen" Foreground="White"/></StackPanel>
                                 </Button>
-                                <Button Content="Konten verwalten" Command="{Binding ManageAccountsCommand}"/>
+                                <Button Content="Konten verwalten" Command="{Binding ManageAccountsCommand}" Margin="0,0,8,0"/>
+                            </WrapPanel>
+                            <WrapPanel Margin="0,8,0,0">
+                                <Button Command="{Binding ClearUploadFolderCommand}" Margin="0,0,8,0"
+                                        ToolTip="Löscht die Kopien, die „Hochladen“ mit dem Titel als Dateinamen angelegt hat. Deine Clips bleiben.">
+                                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE74D;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="Hochlad-Ordner leeren"/></StackPanel>
+                                </Button>
+                                <Button Content="&#xE838;" FontFamily="{StaticResource Icons}" Command="{Binding OpenUploadFolderCommand}" ToolTip="Hochlad-Ordner öffnen"/>
                             </WrapPanel>
                             <TextBlock Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,8,0,0" Text="{Binding Selected.UploadedText}"/>
                         </StackPanel>
@@ -247,6 +259,7 @@
                                 <TextBlock Style="{StaticResource H2}" Text="TikTok" Margin="0"/>
                             </DockPanel>
                             <TextBox Style="{StaticResource SectionBox}" Text="{Binding TikTokCaption, UpdateSourceTrigger=PropertyChanged}" MinHeight="70"/>
+                            <CheckBox Content="Hochgeladen" IsChecked="{Binding UploadedTikTok}" Margin="0,8,0,0" ToolTip="Haken setzen, wenn der Clip auf TikTok online ist. In der Galerie bekommt er dann einen grünen Haken."/>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource Card}">
@@ -269,6 +282,7 @@
                                     ToolTip="Lustigste Stelle mit Titel. Wird beim Hochladen auf YouTube automatisch mitgeschickt."
                                     Visibility="{Binding HasYouTubeThumbnail, Converter={StaticResource BoolToVis}}"
                                     Command="{Binding DataContext.OpenYouTubeThumbnailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                            <CheckBox Content="Hochgeladen" IsChecked="{Binding UploadedYouTube}" Margin="0,8,0,0" ToolTip="Haken setzen, wenn der Clip auf YouTube online ist. In der Galerie bekommt er dann einen grünen Haken."/>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource Card}">
@@ -282,6 +296,7 @@
                                 <TextBlock Style="{StaticResource H2}" Text="Instagram Reels" Margin="0"/>
                             </DockPanel>
                             <TextBox Style="{StaticResource SectionBox}" Text="{Binding InstagramCaption, UpdateSourceTrigger=PropertyChanged}" MinHeight="60"/>
+                            <CheckBox Content="Hochgeladen" IsChecked="{Binding UploadedInstagram}" Margin="0,8,0,0" ToolTip="Haken setzen, wenn der Clip auf Instagram online ist. In der Galerie bekommt er dann einen grünen Haken."/>
                         </StackPanel>
                     </Border>
                     <Button Content="Texte speichern" HorizontalAlignment="Left"

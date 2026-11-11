@@ -17,6 +17,35 @@ public static class UploadCopy
         [':'] = '꞉', ['?'] = '？', ['"'] = '＂', ['/'] = '∕', ['\\'] = '⧵', ['*'] = '∗', ['<'] = '‹', ['>'] = '›', ['|'] = '∣',
     };
 
+    /// <summary>Where the copies go: %TEMP%\UCut-Hochladen.</summary>
+    public static string DefaultFolder => Path.Combine(Path.GetTempPath(), "UCut-Hochladen");
+
+    /// <summary>Deletes all copies. Returns how many were deleted and how many are still open somewhere (browser upload).</summary>
+    public static (int Deleted, int Locked) Clear(string folder)
+    {
+        var deleted = 0;
+        var locked = 0;
+        if (!Directory.Exists(folder))
+        {
+            return (0, 0);
+        }
+
+        foreach (var f in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).ToList())
+        {
+            try
+            {
+                File.Delete(f);
+                deleted++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                locked++;
+            }
+        }
+
+        return (deleted, locked);
+    }
+
     public static string FileName(string text, string extension = ".mp4")
     {
         var sb = new StringBuilder();
@@ -52,17 +81,7 @@ public static class UploadCopy
     public static string Create(string video, string text, string folder)
     {
         Directory.CreateDirectory(folder);
-        foreach (var old in Directory.EnumerateFiles(folder))
-        {
-            try
-            {
-                File.Delete(old);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Still open in the browser upload: leave it.
-            }
-        }
+        Clear(folder); // a copy still open in the browser upload stays
 
         var target = Path.Combine(folder, FileName(text, Path.GetExtension(video)));
         File.Copy(video, target, overwrite: true);

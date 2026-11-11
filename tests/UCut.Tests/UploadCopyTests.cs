@@ -37,3 +37,17 @@ public class UploadCopyTests
         Assert.True(File.Exists(video));
     }
 }
+
+public class UploadFolderClearTests
+{
+    [Fact]
+    public void Leeren_loescht_alle_Kopien_und_zaehlt_sie()
+    {
+        var dir = Directory.CreateTempSubdirectory("ucut-up-").FullName;
+        File.WriteAllText(Path.Combine(dir, "a.mp4"), "");
+        File.WriteAllText(Path.Combine(dir, "b.mp4"), "");
+        Assert.Equal((2, 0), UploadCopy.Clear(dir));
+        Assert.Empty(Directory.GetFiles(dir));
+        Assert.Equal((0, 0), UploadCopy.Clear(Path.Combine(dir, "fehlt")));
+    }
+}
