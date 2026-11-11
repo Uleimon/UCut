@@ -208,14 +208,19 @@ public sealed class UCutEngine : IDisposable
         return new TwitchSearchResult(candidates, clips.Count, clips.Count - fresh.Count);
     }
 
+    /// <summary>Folder for the original Twitch downloads (kept, so a preview is not downloaded twice).</summary>
+    public string TwitchDownloadFolder => string.IsNullOrWhiteSpace(Settings.TwitchClips.DownloadFolder)
+        ? Path.Combine(Settings.OutputFolder, "_Twitch-Originale")
+        : Settings.TwitchClips.DownloadFolder;
+
+    /// <summary>Downloads one Twitch clip (or returns the file already there). Used for the preview and before processing.</summary>
+    public Task<string> DownloadTwitchClipAsync(TwitchClip clip, CancellationToken ct = default) =>
+        new ClipDownloader(Settings.TwitchClips.YtDlpPath).DownloadAsync(clip, TwitchDownloadFolder, ct);
+
     /// <summary>Downloads (yt-dlp) and processes the chosen Twitch clips. The overview CSV is updated after every clip.</summary>
     public async Task<BatchResult> ProcessTwitchAsync(IReadOnlyList<TwitchClip> clips, IProgress<BatchProgress>? progress = null, CancellationToken ct = default)
     {
         var archive = ClipArchive.Load(Settings.OutputFolder);
-        var downloader = new ClipDownloader(Settings.TwitchClips.YtDlpPath);
-        var downloadFolder = string.IsNullOrWhiteSpace(Settings.TwitchClips.DownloadFolder)
-            ? Path.Combine(Settings.OutputFolder, "_Twitch-Originale")
-            : Settings.TwitchClips.DownloadFolder;
         var done = 0;
         var failed = 0;
         foreach (var clip in clips)
@@ -229,7 +234,7 @@ public sealed class UCutEngine : IDisposable
             try
             {
                 Log.Write($"[{done + failed + 1}/{clips.Count}] \"{clip.Title}\" vom {clip.CreatedAt.ToLocalTime():dd.MM.yyyy} ({clip.ViewCount} Aufrufe) wird geladen ...");
-                var file = await downloader.DownloadAsync(clip, downloadFolder, ct).ConfigureAwait(false);
+                var file = await DownloadTwitchClipAsync(clip, ct).ConfigureAwait(false);
                 var game = clip.GameName is { Length: > 0 } raw
                     ? new GameResult(GameDetector.ToFolderName(raw, Settings.Games), raw, "Twitch-Clip")
                     : new GameResult(Settings.Games.UnknownFolder, null, "Twitch-Clip");

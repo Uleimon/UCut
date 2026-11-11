@@ -175,7 +175,7 @@ public static class FunnyFilter
             if (words.Count > 0)
             {
                 hint += Math.Min(2, words.Count) * 3;
-                reasons.Add("Titel: " + string.Join(", ", words));
+                reasons.Add(string.Join(", ", words.Select(w => $"„{w}“")) + " im Titel");
             }
 
             // Share of clips with fewer views (0 = least watched, 1 = most watched).
@@ -184,7 +184,7 @@ public static class FunnyFilter
             var topViews = rank >= 1 - settings.TopViewsShare;
             if (topViews)
             {
-                reasons.Add($"viel angeschaut ({clip.ViewCount} Aufrufe)");
+                reasons.Add("gehört zu deinen meistgesehenen Clips");
             }
 
             if (!settings.OnlyFunny || words.Count > 0 || topViews)

@@ -99,6 +99,24 @@ public partial class App : Application
                 Console.Out.WriteLine($"import ok: {main.Import.Items.Count} item(s)");
             }
 
+            // Twitch preview panel with a fake clip; yt-dlp is missing here, so it must show an error text, not crash.
+            main.Page = "twitch";
+            var fake = new UCut.Twitch.TwitchClip("selftest", "https://clips.twitch.tv/selftest", "Selbsttest xD", 42, DateTimeOffset.Now, 12, "0", "test")
+            {
+                GameName = "Test",
+            };
+            var item = new TwitchItem(new UCut.Twitch.ClipCandidate(fake, 1, ["„xd“ im Titel"]));
+            main.Twitch.Items.Add(item);
+            main.Twitch.Current = item;
+            window.UpdateLayout();
+            for (var i = 0; i < 20 && main.Twitch.PreviewStatus.EndsWith("...", StringComparison.Ordinal); i++)
+            {
+                await Task.Delay(250);
+            }
+
+            window.UpdateLayout();
+            Console.Out.WriteLine($"twitch preview ok: {main.Twitch.PreviewStatus}");
+
             Shutdown(0);
         }
         catch (Exception ex)

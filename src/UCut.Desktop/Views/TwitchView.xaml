@@ -58,7 +58,12 @@
             </DockPanel>
         </Border>
 
-        <ListBox ItemsSource="{Binding Items}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding Current}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemsPanel>
                 <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
             </ListBox.ItemsPanel>
@@ -73,7 +78,18 @@
             </ListBox.ItemContainerStyle>
             <ListBox.ItemTemplate>
                 <DataTemplate>
-                    <Border Width="300" Margin="0,0,14,14" CornerRadius="12" Background="{StaticResource SurfaceBrush}">
+                    <Border Width="300" Margin="0,0,14,14" CornerRadius="12" Background="{StaticResource SurfaceBrush}" BorderThickness="2" Cursor="Hand"
+                            ToolTip="Klicken für die Vorschau">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="BorderBrush" Value="Transparent"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
                         <StackPanel>
                             <Grid Height="169">
                                 <Border CornerRadius="12,12,0,0" Background="#08090C" ClipToBounds="True">
@@ -100,5 +116,34 @@
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
+
+        <!-- Preview -->
+        <Border Grid.Column="1" Width="380" Margin="12,0,0,0" CornerRadius="12" Background="{StaticResource SidebarBrush}"
+                Visibility="{Binding HasCurrent, Converter={StaticResource BoolToVis}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="16">
+                    <Grid Height="214" Background="Black">
+                        <MediaElement x:Name="Player" Source="{Binding PreviewUri}" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform"
+                                      MediaOpened="OnMediaOpened" MediaEnded="OnMediaEnded"/>
+                        <TextBlock Text="{Binding PreviewStatus}" Foreground="White" TextWrapping="Wrap" TextAlignment="Center"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16"/>
+                        <Button x:Name="PlayButton" Style="{StaticResource IconButton}" Content="&#xE769;" Click="OnPlayPause"
+                                HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Background="#AA000000"/>
+                    </Grid>
+                    <Slider x:Name="Seek" Margin="0,6,0,0" Minimum="0" Maximum="1" PreviewMouseUp="OnSeek" IsMoveToPointEnabled="True"/>
+                    <StackPanel DataContext="{Binding Current}">
+                        <TextBlock Text="{Binding Title, Mode=OneWay}" FontSize="17" FontWeight="Bold" Margin="0,10,0,4" TextWrapping="Wrap"/>
+                        <TextBlock Style="{StaticResource Subtle}" TextWrapping="Wrap">
+                            <Run Text="{Binding Game, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding DateText, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Views, Mode=OneWay}"/>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource Subtle}" Foreground="{StaticResource FunBrush}" Text="{Binding Reasons, Mode=OneWay}" TextWrapping="Wrap" Margin="0,4,0,10"/>
+                        <CheckBox Content="Zum Laden auswählen" IsChecked="{Binding Selected}"/>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,10,0,0"
+                               Text="Die Vorschau wird im Ordner _Twitch-Originale gespeichert und beim Laden wiederverwendet."/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+        </Grid>
     </DockPanel>
 </UserControl>

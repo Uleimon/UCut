@@ -15,7 +15,7 @@ internal sealed class TwitchItem(ClipCandidate candidate) : ObservableObject
     public string Views => $"{Clip.ViewCount:N0} Aufrufe";
     public string Game => Clip.GameName ?? "?";
     public string Duration => $"{Clip.DurationSeconds:0} s";
-    public string Reasons => string.Join(" · ", candidate.Reasons);
+    public string Reasons => candidate.Reasons.Count == 0 ? "" : "Vorgeschlagen, weil: " + string.Join(" und ", candidate.Reasons);
 }
 
 /// <summary>Old Twitch clips: search, pick, load overnight.</summary>
@@ -28,6 +28,10 @@ internal sealed class TwitchViewModel : ObservableObject
     private bool _shutdownAfter;
     private string _summary = "";
     private bool _searching;
+    private TwitchItem? _current;
+    private Uri? _previewUri;
+    private string _previewStatus = "";
+    private CancellationTokenSource? _previewCts;
 
     public TwitchViewModel(MainViewModel main)
     {
@@ -62,6 +66,24 @@ internal sealed class TwitchViewModel : ObservableObject
     public string Summary { get => _summary; private set => Set(ref _summary, value); }
     public bool Searching { get => _searching; private set => Set(ref _searching, value); }
 
+    /// <summary>The clip shown in the preview panel (click on a card).</summary>
+    public TwitchItem? Current
+    {
+        get => _current;
+        set
+        {
+            if (Set(ref _current, value))
+            {
+                OnPropertyChanged(nameof(HasCurrent));
+                _ = LoadPreviewAsync(value);
+            }
+        }
+    }
+
+    public bool HasCurrent => _current is not null;
+    public Uri? PreviewUri { get => _previewUri; private set => Set(ref _previewUri, value); }
+    public string PreviewStatus { get => _previewStatus; private set => Set(ref _previewStatus, value); }
+
     public void Refresh()
     {
         OnPropertyChanged(nameof(IsConfigured));
@@ -78,6 +100,7 @@ internal sealed class TwitchViewModel : ObservableObject
             var from = new DateTimeOffset(From.Date);
             var to = new DateTimeOffset(To.Date.AddDays(1));
             var r = await Task.Run(() => engine.SearchTwitchAsync(from, to, OnlyFunny, 0));
+            Current = null;
             Items.Clear();
             foreach (var c in r.Candidates)
             {
@@ -96,6 +119,49 @@ internal sealed class TwitchViewModel : ObservableObject
         }
     }
 
+    /// <summary>Downloads the clip into the Twitch originals folder (reused later when loading) and shows it.</summary>
+    private async Task LoadPreviewAsync(TwitchItem? item)
+    {
+        if (_previewCts is not null)
+        {
+            await _previewCts.CancelAsync();
+            _previewCts.Dispose();
+        }
+
+        PreviewUri = null;
+        if (item is null)
+        {
+            _previewCts = null;
+            PreviewStatus = "";
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _previewCts = cts;
+        PreviewStatus = "Vorschau wird geladen ...";
+        try
+        {
+            var engine = _main.Engine;
+            var file = await Task.Run(() => engine.DownloadTwitchClipAsync(item.Clip, cts.Token), cts.Token);
+            if (!cts.IsCancellationRequested && ReferenceEquals(item, _current))
+            {
+                PreviewUri = new Uri(file);
+                PreviewStatus = "";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Another clip was clicked.
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or System.IO.IOException)
+        {
+            if (ReferenceEquals(item, _current))
+            {
+                PreviewStatus = "Vorschau ging nicht: " + ex.Message + " (yt-dlp in den Einstellungen prüfen)";
+            }
+        }
+    }
+
     private async Task LoadAsync()
     {
         var chosen = Items.Where(i => i.Selected).ToList();
@@ -106,6 +172,11 @@ internal sealed class TwitchViewModel : ObservableObject
             foreach (var c in chosen)
             {
                 Items.Remove(c);
+            }
+
+            if (Current is not null && !Items.Contains(Current))
+            {
+                Current = null;
             }
 
             if (ShutdownAfter && !r.Cancelled)
