@@ -88,10 +88,11 @@ int Init()
     {
         WatchFolder = Path.Combine(videos, "Aitum Vertical"),
         OutputFolder = Path.Combine(videos, "UCut"),
+        Games = new GameSettings { TwitchChannel = "uleimon" },
     };
     SettingsStore.Save(s, settingsPath);
     Console.WriteLine($"Vorlage angelegt: {settingsPath}");
-    Console.WriteLine("Bitte darin mindestens watchFolder (Aitum-Ausgabeordner) und outputFolder prüfen.");
+    Console.WriteLine("Bitte darin watchFolder (Aitum-Ausgabeordner) und outputFolder prüfen, für Twitch-Clips unter \"games\" twitchClientId und twitchClientSecret eintragen.");
     return 0;
 }
 
