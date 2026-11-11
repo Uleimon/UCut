@@ -29,7 +29,20 @@ if (droppedFiles)
 
 var command = arguments.Count > 0 ? arguments[0].ToLowerInvariant() : "help";
 
-void Log(string message) => Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
+string? logFile = null;
+
+void Log(string message)
+{
+    var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+    Console.WriteLine(line);
+    if (logFile is not null)
+    {
+        // Also on disk, so a run overnight can be read in the morning (the window is gone after shutdown).
+        try { File.AppendAllText(logFile, $"[{DateTime.Now:dd.MM.yyyy HH:mm:ss}] {message}{Environment.NewLine}"); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+}
 
 try
 {
@@ -80,7 +93,7 @@ try
 }
 catch (Exception ex) when (ex is FileNotFoundException or InvalidOperationException or ArgumentException or InvalidDataException)
 {
-    Console.Error.WriteLine($"Fehler: {ex.Message}");
+    Log($"Fehler: {ex.Message}");
     return 1;
 }
 
@@ -112,6 +125,10 @@ int Init()
     {
         throw new InvalidDataException("outputFolder ist in den Einstellungen nicht gesetzt.");
     }
+
+    Directory.CreateDirectory(s.OutputFolder);
+    logFile = Path.Combine(s.OutputFolder, "UCut-Protokoll.txt");
+    Log($"--- UCut gestartet: {string.Join(' ', args)} ---");
 
     var ffmpeg = new Ffmpeg(s.FfmpegPath, s.FfprobePath);
     IClipWriter writer = s.Writer.UseClaude && ClaudeClipWriter.IsAvailable
@@ -311,6 +328,7 @@ async Task<int> TwitchAsync(string? since, string? until, string? max, bool all,
                 Game = game.FolderName, Video = result.VideoPath, Score = result.Metadata.Score.Total,
                 Funniness = result.Metadata.Funniness?.Score, ProcessedAt = DateTimeOffset.Now,
             });
+            archive.WriteOverview(); // after every clip, so the list is current even if the run stops
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or InvalidDataException)
         {
