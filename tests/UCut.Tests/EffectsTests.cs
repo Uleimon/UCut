@@ -102,3 +102,93 @@ public class EffectsTests
         }
     }
 }
+
+public class MemeLibraryTests
+{
+    private static EditProject Project(double seconds) => new()
+    {
+        Source = "x.mp4", SourceDuration = seconds, Width = 1080, Height = 1920,
+        Segments = [new EditSegment { In = 0, Out = seconds }],
+    };
+
+    [Fact]
+    public void Auto_Memes_setzen_Zoom_Text_und_Sound_an_Lachern_mit_Abstand()
+    {
+        var fx = AutoMemes.ForLaughs([2.0, 3.0, 8.0, 14.0, 20.0], 25, ["/m/boom.mp3", "/m/katze.png"], new Random(1));
+        Assert.Equal(3, fx.Count(e => e.Kind == EffectKind.Zoom));
+        Assert.Equal([1.8, 7.8, 13.8], fx.Where(e => e.Kind == EffectKind.Zoom).Select(e => e.Start));
+        Assert.Equal(3, fx.Count(e => e.Kind == EffectKind.Sound));
+        Assert.Contains(fx, e => e.Kind == EffectKind.Meme && e.Path == "/m/katze.png");
+        Assert.Contains(fx, e => e.Kind == EffectKind.Text && AutoMemes.Words.Contains(e.Text));
+    }
+
+    [Fact]
+    public void Ohne_Meme_Ordner_gibt_es_Zoom_und_Text()
+    {
+        var fx = AutoMemes.ForLaughs([4.0], 10, [], new Random(1));
+        Assert.Equal([EffectKind.Zoom, EffectKind.Text], fx.Select(e => e.Kind));
+    }
+
+    [Fact]
+    public void Stueck_loeschen_nimmt_seine_Effekte_mit_und_schiebt_spaetere_nach_vorn()
+    {
+        var p = Project(10);
+        p.SplitAt(4);
+        p.Effects = [new EffectItem { Kind = EffectKind.Zoom, Start = 1 }, new EffectItem { Kind = EffectKind.Flash, Start = 6 }];
+        Assert.True(p.RemoveSegment(0));
+        Assert.Single(p.Effects);
+        Assert.Equal(2, p.Effects[0].Start, 3);
+    }
+
+    [Fact]
+    public void Vorschau_Ausschnitt_verschiebt_die_Effekte()
+    {
+        var p = Project(20);
+        p.Effects = [new EffectItem { Kind = EffectKind.Zoom, Start = 1 }, new EffectItem { Kind = EffectKind.Text, Text = "XD", Start = 11, Duration = 1 }];
+        var part = p.PreviewPart(10, 6);
+        Assert.Equal(6, part.Duration, 3);
+        Assert.Single(part.Effects);
+        Assert.Equal(1, part.Effects[0].Start, 3);
+        Assert.Equal(2, p.Effects.Count);
+    }
+
+    [Fact]
+    public void Meme_Ordner_listet_nur_Bilder_GIFs_Videos_und_Sounds()
+    {
+        var dir = Directory.CreateTempSubdirectory("ucut-memes-").FullName;
+        Directory.CreateDirectory(Path.Combine(dir, "sub"));
+        foreach (var f in new[] { "b.png", "a.gif", "sub/c.mp3", "x.txt", "d.mp4" })
+        {
+            File.WriteAllText(Path.Combine(dir, f), "");
+        }
+
+        Assert.Equal(["a.gif", "b.png", "c.mp3", "d.mp4"], MemeLibrary.List(dir).Select(Path.GetFileName));
+        Assert.Empty(MemeLibrary.List(Path.Combine(dir, "fehlt")));
+    }
+
+    [Fact]
+    public async Task Start_Sounds_werden_mit_ffmpeg_erzeugt()
+    {
+        Assert.SkipUnless(EffectsTestsHelper.HasFfmpeg(), "ffmpeg nicht installiert");
+        var dir = Path.Combine(Directory.CreateTempSubdirectory("ucut-memes-").FullName, "Memes");
+        Assert.Equal(MemeLibrary.Starter.Length, await MemeLibrary.CreateStarterPackAsync("ffmpeg", dir, TestContext.Current.CancellationToken));
+        Assert.Equal(MemeLibrary.Starter.Length, MemeLibrary.List(dir).Count);
+        Assert.All(MemeLibrary.List(dir), f => Assert.True(new FileInfo(f).Length > 1000));
+        Assert.Equal(0, await MemeLibrary.CreateStarterPackAsync("ffmpeg", dir, TestContext.Current.CancellationToken));
+    }
+}
+
+internal static class EffectsTestsHelper
+{
+    public static bool HasFfmpeg()
+    {
+        try
+        {
+            return ProcessRunner.RunAsync("ffmpeg", ["-version"]).Result.ExitCode == 0;
+        }
+        catch (AggregateException)
+        {
+            return false;
+        }
+    }
+}

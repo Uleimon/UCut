@@ -89,8 +89,14 @@ public partial class App : Application
                 main.CutRoom.SplitCommand.Execute(null);
                 main.CutRoom.ClickTimeline(10, true);
                 main.CutRoom.UndoCommand.Execute(null);
+                main.CutRoom.AddZoomCommand.Execute(null);
+                main.CutRoom.AddFlashCommand.Execute(null);
+                main.CutRoom.SelectedEffect!.Size = 0.4;
+                main.CutRoom.DeleteEffectCommand.Execute(null);
+                main.CutRoom.UndoCommand.Execute(null);
                 window.UpdateLayout();
                 await Task.Delay(1500);
+                Console.Out.WriteLine($"effects ok: {main.CutRoom.EffectRows.Count} effect(s), {main.CutRoom.Library.Count} meme file(s)");
                 Console.Out.WriteLine($"cutroom ok: {main.CutRoom.Segments.Count} segment(s), {main.CutRoom.Tracks.Count} track(s)");
 
                 main.AddFiles([video]);

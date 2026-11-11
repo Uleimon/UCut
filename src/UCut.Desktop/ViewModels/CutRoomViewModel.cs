@@ -96,7 +96,7 @@ internal sealed record Choice<T>(T Value, string Label)
 /// The cut room: one video, a timeline with video and audio rows, split/delete/trim like Premiere (S, Entf, Q, W),
 /// volume per track, music, fades, export to MP4 (H.264) or MP3. Non-destructive: the source stays untouched.
 /// </summary>
-internal sealed class CutRoomViewModel : ObservableObject
+internal sealed partial class CutRoomViewModel : ObservableObject
 {
     private readonly MainViewModel _main;
     private readonly Stack<EditProject> _undo = new();
@@ -125,6 +125,7 @@ internal sealed class CutRoomViewModel : ObservableObject
         _format = Formats[0];
         _size = Sizes[0];
         _quality = Qualities[0];
+        InitEffects();
 
         OpenCommand = new AsyncCommand(async () =>
         {
@@ -151,13 +152,14 @@ internal sealed class CutRoomViewModel : ObservableObject
         CancelExportCommand = new RelayCommand(_ => _exportCts?.Cancel(), _ => Exporting);
         ResetCommand = new RelayCommand(_ =>
         {
-            if (_project is not null && _main.Dialogs.Confirm("Schnitt zurücksetzen", "Alle Schnitte, Lautstärken und Musik verwerfen?"))
+            if (_project is not null && _main.Dialogs.Confirm("Schnitt zurücksetzen", "Alle Schnitte, Lautstärken, Musik und Memes verwerfen?"))
             {
                 Edit(p =>
                 {
                     p.Segments = [new EditSegment { In = 0, Out = p.SourceDuration }];
                     p.Tracks.ForEach(t => { t.Volume = 1; t.Muted = false; });
                     p.Music = null;
+                    p.Effects.Clear();
                     p.FadeIn = p.FadeOut = 0;
                     return true;
                 });
@@ -294,7 +296,9 @@ internal sealed class CutRoomViewModel : ObservableObject
             OnPropertyChanged(nameof(MusicUri));
             BuildTracks();
             Rebuild();
+            BuildEffects();
             _main.Page = "cutroom";
+            await LoadLibraryAsync();
             await LoadImagesAsync(project);
         }
         catch (InvalidOperationException ex)
@@ -409,6 +413,7 @@ internal sealed class CutRoomViewModel : ObservableObject
 
         Playhead = Math.Min(Playhead, Duration);
         Rebuild();
+        BuildEffects();
         OnPropertyChanged(nameof(FadeIn));
         OnPropertyChanged(nameof(FadeOut));
         OnPropertyChanged(nameof(MusicUri));
@@ -518,6 +523,7 @@ internal sealed class CutRoomViewModel : ObservableObject
         OnPropertyChanged(nameof(PlayheadX));
         OnPropertyChanged(nameof(PlayheadText));
         OnPropertyChanged(nameof(MusicStart));
+        LayoutEffects();
     }
 
     /// <summary>Click on the timeline: move the playhead there and select the piece under it.</summary>
@@ -628,7 +634,7 @@ internal sealed class CutRoomViewModel : ObservableObject
             return;
         }
 
-        var options = new ExportOptions(Format.Value, Size.Value, Quality.Value);
+        var options = new ExportOptions(Format.Value, Size.Value, Quality.Value, TextFont: _main.Engine.Settings.Captions.Font);
         var name = Path.GetFileNameWithoutExtension(_project.Source) + "_schnitt" + options.Extension;
         var filter = options.Format == ExportFormat.Mp3 ? "MP3|*.mp3" : "MP4-Video|*.mp4";
         var target = _main.Dialogs.SaveFile("Exportieren als", name, filter);

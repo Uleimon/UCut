@@ -55,6 +55,7 @@ jobs:
           if (-not $done) { Write-Error "Selbsttest hängt"; exit 1 }
           if ($p.ExitCode -ne 0) { Write-Error "Selbsttest fehlgeschlagen (Code $($p.ExitCode))"; exit 1 }
           if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'cutroom ok' -Quiet)) { Write-Error "Schnittraum wurde nicht getestet"; exit 1 }
+          if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'effects ok: 2 effect' -Quiet)) { Write-Error "Memes/Effekte wurden nicht getestet"; exit 1 }
           if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'twitch preview ok' -Quiet)) { Write-Error "Twitch-Vorschau wurde nicht getestet"; exit 1 }
           if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'library ok' -Quiet)) { Write-Error "Galerie wurde nicht getestet"; exit 1 }
           if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'redo ok' -Quiet)) { Write-Error "Neu machen wurde nicht getestet"; exit 1 }

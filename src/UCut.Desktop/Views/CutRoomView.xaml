@@ -88,7 +88,7 @@
             <Grid Grid.Row="1" Margin="20,0,20,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="320"/>
+                    <ColumnDefinition Width="340"/>
                 </Grid.ColumnDefinitions>
                 <DockPanel Margin="0,0,16,0">
                     <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
@@ -135,6 +135,110 @@
                                     <ProgressBar Maximum="1" Value="{Binding ExportProgress, Mode=OneWay}" Margin="0,6,0,6"/>
                                     <Button Style="{StaticResource Danger}" Content="Abbrechen" Command="{Binding CancelExportCommand}" HorizontalAlignment="Left"/>
                                 </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource H2}" Text="Memes &amp; Effekte"/>
+                                <TextBlock Style="{StaticResource Hint}" Text="Abspielkopf an die lustige Stelle, dann einen Knopf drücken. Das Meme kommt genau dorthin."/>
+                                <Button Style="{StaticResource Primary}" Command="{Binding AutoMemesCommand}" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                                        ToolTip="Sucht Lacher im Ton und setzt dort Zoom, Text oder Meme und einen Sound">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE945;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/>
+                                        <TextBlock Text="Auto-Memes bei Lachern" Foreground="White"/>
+                                    </StackPanel>
+                                </Button>
+                                <WrapPanel>
+                                    <Button Style="{StaticResource ToolButton}" Content="Meme / GIF / Sound …" Command="{Binding AddMemeFileCommand}" Margin="0,0,6,6"/>
+                                    <Button Style="{StaticResource ToolButton}" Content="Text" Command="{Binding AddTextCommand}" Margin="0,0,6,6" ToolTip="Großer Text, der aufploppt (BRUH, XD …)"/>
+                                    <Button Style="{StaticResource ToolButton}" Content="Zoom" Command="{Binding AddZoomCommand}" Margin="0,0,6,6" ToolTip="Schneller Reaktions-Zoom"/>
+                                    <Button Style="{StaticResource ToolButton}" Content="Wackeln" Command="{Binding AddShakeCommand}" Margin="0,0,6,6" ToolTip="Bild wackelt (Explosion, Schrei)"/>
+                                    <Button Style="{StaticResource ToolButton}" Content="Blitz" Command="{Binding AddFlashCommand}" Margin="0,0,6,6" ToolTip="Kurzer weißer Blitz"/>
+                                </WrapPanel>
+
+                                <DockPanel Margin="0,8,0,4">
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="&#xE72C;" FontFamily="{StaticResource Icons}" ToolTip="Meme-Ordner neu laden" Command="{Binding ReloadLibraryCommand}" Margin="6,0,0,0"/>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="Meme-Ordner öffnen" Command="{Binding OpenMemeFolderCommand}" Margin="0"/>
+                                    <TextBlock Text="Dein Meme-Ordner" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                </DockPanel>
+                                <TextBlock Style="{StaticResource Hint}" Visibility="{Binding HasLibrary, Converter={StaticResource InvBoolToVis}}"
+                                           Text="Noch leer. Leg Bilder, GIFs, Meme-Videos und Sounds in den Meme-Ordner, dann erscheinen sie hier als Knöpfe."/>
+                                <ItemsControl ItemsSource="{Binding Library}" MaxHeight="150">
+                                    <ItemsControl.Template>
+                                        <ControlTemplate TargetType="ItemsControl">
+                                            <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsPresenter/></ScrollViewer>
+                                        </ControlTemplate>
+                                    </ItemsControl.Template>
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Style="{StaticResource ToolButton}" Margin="0,0,6,6" Padding="8,4" ToolTip="{Binding Path}"
+                                                    Command="{Binding DataContext.AddFromLibraryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Path}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Glyph}" Style="{StaticResource Icon}" Margin="0,0,6,0"/>
+                                                    <TextBlock Text="{Binding Name}" MaxWidth="120" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Text="Gesetzte Effekte" FontWeight="SemiBold" Margin="0,8,0,4" Visibility="{Binding HasEffects, Converter={StaticResource BoolToVis}}"/>
+                                <ListBox ItemsSource="{Binding EffectRows}" SelectedItem="{Binding SelectedEffect}" MaxHeight="160"
+                                         Visibility="{Binding HasEffects, Converter={StaticResource BoolToVis}}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel>
+                                                <Border DockPanel.Dock="Left" Width="10" Height="10" CornerRadius="5" Background="{Binding Color}" Margin="0,0,8,0"/>
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding TimeText}" Style="{StaticResource Subtle}" Margin="8,0,0,0"/>
+                                                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <!-- Editor for the selected effect -->
+                                <StackPanel DataContext="{Binding SelectedEffect}" Margin="0,8,0,0"
+                                            Visibility="{Binding DataContext.HasSelectedEffect, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Visibility="{Binding ShowText, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Style="{StaticResource Subtle}" Text="Text"/>
+                                        <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,6"/>
+                                    </StackPanel>
+                                    <TextBlock Style="{StaticResource Subtle}" Text="Dauer (Sekunden)"/>
+                                    <Slider Minimum="0.2" Maximum="8" Value="{Binding Duration}" Focusable="False" IsMoveToPointEnabled="True" Margin="0,2,0,6"/>
+                                    <StackPanel Visibility="{Binding ShowPosition, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Style="{StaticResource Subtle}" Text="Links ↔ rechts"/>
+                                        <Slider Minimum="0" Maximum="1" Value="{Binding X}" Focusable="False" IsMoveToPointEnabled="True" Margin="0,2,0,6"/>
+                                        <TextBlock Style="{StaticResource Subtle}" Text="Oben ↕ unten"/>
+                                        <Slider Minimum="0" Maximum="1" Value="{Binding Y}" Focusable="False" IsMoveToPointEnabled="True" Margin="0,2,0,6"/>
+                                        <TextBlock Style="{StaticResource Subtle}" Text="{Binding SizeLabel}"/>
+                                        <Slider Minimum="0.03" Maximum="{Binding SizeMax}" Value="{Binding Size}" Focusable="False" IsMoveToPointEnabled="True" Margin="0,2,0,6"/>
+                                    </StackPanel>
+                                    <StackPanel Visibility="{Binding ShowAnimation, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Style="{StaticResource Subtle}" Text="Animation"/>
+                                        <ComboBox ItemsSource="{Binding Animations}" SelectedItem="{Binding Animation}" Margin="0,2,0,6"/>
+                                    </StackPanel>
+                                    <StackPanel Visibility="{Binding ShowVolume, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Style="{StaticResource Subtle}" Text="Lautstärke"/>
+                                        <Slider Minimum="0" Maximum="2" Value="{Binding Volume}" Focusable="False" IsMoveToPointEnabled="True" Margin="0,2,0,6"/>
+                                    </StackPanel>
+                                    <CheckBox Content="Grün entfernen (Green-Screen-Meme)" IsChecked="{Binding RemoveGreen}" Visibility="{Binding ShowGreen, Converter={StaticResource BoolToVis}}"/>
+                                    <WrapPanel Margin="0,6,0,0" DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                        <Button Style="{StaticResource ToolButton}" Content="Zum Abspielkopf" Command="{Binding EffectHereCommand}" Margin="0,0,6,6" ToolTip="Effekt beginnt an der Position des Abspielkopfs"/>
+                                        <Button Style="{StaticResource Danger}" Content="Entfernen" Command="{Binding DeleteEffectCommand}" Margin="0,0,6,6"/>
+                                    </WrapPanel>
+                                </StackPanel>
+
+                                <Button Style="{StaticResource ToolButton}" Command="{Binding PreviewCommand}" HorizontalAlignment="Stretch" Margin="0,8,0,0"
+                                        ToolTip="Rendert 6 Sekunden ab dem Abspielkopf mit allen Memes und zeigt sie im Vollbild">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE768;" Style="{StaticResource Icon}" Margin="0,0,8,0"/>
+                                        <TextBlock Text="Vorschau mit Effekten (6 s)"/>
+                                    </StackPanel>
+                                </Button>
+                                <ProgressBar IsIndeterminate="True" Height="4" Margin="0,6,0,0" Visibility="{Binding EffectBusy, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource Card}">
@@ -186,7 +290,7 @@
             </Border>
 
             <!-- Timeline -->
-            <Grid Grid.Row="3" Background="{StaticResource WindowBrush}" Height="300">
+            <Grid Grid.Row="3" Background="{StaticResource WindowBrush}" Height="350">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="190"/>
                     <ColumnDefinition Width="*"/>
@@ -197,6 +301,10 @@
                         <DockPanel Height="70" Margin="0,4">
                             <TextBlock Text="&#xE714;" Style="{StaticResource Icon}" Margin="0,0,8,0"/>
                             <TextBlock Text="Video" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        </DockPanel>
+                        <DockPanel Height="44" Margin="0,4">
+                            <TextBlock Text="&#xE945;" Style="{StaticResource Icon}" Margin="0,0,8,0" Foreground="{StaticResource FunBrush}"/>
+                            <TextBlock Text="Memes &amp; Effekte" VerticalAlignment="Center" FontWeight="SemiBold"/>
                         </DockPanel>
                         <ItemsControl ItemsSource="{Binding Tracks}">
                             <ItemsControl.ItemTemplate>
@@ -271,6 +379,40 @@
                             </ItemsControl>
                             <Border Height="70" Margin="0,4" Background="{StaticResource VideoTrackBrush}" CornerRadius="6" Opacity="0.25" HorizontalAlignment="Left"
                                     Width="{Binding TimelineWidth}"/>
+                            <!-- Effects row: one coloured bar per meme/effect -->
+                            <Border Height="44" Margin="0,4" Background="{StaticResource Surface2Brush}" CornerRadius="6">
+                                <ItemsControl ItemsSource="{Binding EffectRows}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><Canvas/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemContainerStyle>
+                                        <Style TargetType="ContentPresenter">
+                                            <Setter Property="Canvas.Left" Value="{Binding Left}"/>
+                                            <Setter Property="Canvas.Top" Value="{Binding Top}"/>
+                                        </Style>
+                                    </ItemsControl.ItemContainerStyle>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Width="{Binding Width}" Height="20" Margin="1,1" CornerRadius="4" Background="{Binding Color}" ToolTip="{Binding Label}" Cursor="Hand">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="BorderThickness" Value="0"/>
+                                                        <Setter Property="Opacity" Value="0.8"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Selected}" Value="True">
+                                                                <Setter Property="BorderThickness" Value="2"/>
+                                                                <Setter Property="BorderBrush" Value="White"/>
+                                                                <Setter Property="Opacity" Value="1"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="{Binding Label}" Foreground="#111" FontSize="11" Margin="4,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Border>
                             <ItemsControl ItemsSource="{Binding Tracks}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>

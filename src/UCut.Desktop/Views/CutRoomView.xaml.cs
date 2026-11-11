@@ -191,6 +191,12 @@ public partial class CutRoomView : UserControl
             return;
         }
 
+        // Click on a meme bar: select it (and still move the playhead there).
+        if (e.OriginalSource is FrameworkElement { DataContext: EffectRow row })
+        {
+            _vm?.SelectEffect(row);
+        }
+
         _dragging = true;
         Lanes.CaptureMouse();
         var wasPlaying = _playing;
