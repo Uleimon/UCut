@@ -49,6 +49,9 @@ public sealed class EditProject
     public List<AudioTrackSettings> Tracks { get; set; } = [];
     public MusicTrack? Music { get; set; }
 
+    /// <summary>Memes, sounds, texts, zooms ... on top (timeline times).</summary>
+    public List<EffectItem> Effects { get; set; } = [];
+
     /// <summary>Fade from/to black at start and end of the cut, seconds (0 = off).</summary>
     public double FadeIn { get; set; }
     public double FadeOut { get; set; }
@@ -130,8 +133,47 @@ public sealed class EditProject
             return false;
         }
 
+        var start = SegmentStart(index);
+        var length = Segments[index].Duration;
         Segments.RemoveAt(index);
+        RippleEffects(start, length);
         return true;
+    }
+
+    /// <summary>A stretch of the timeline was cut out: effects in it go, effects after it move up.</summary>
+    private void RippleEffects(double from, double length)
+    {
+        Effects.RemoveAll(e => e.Start >= from && e.Start < from + length);
+        foreach (var e in Effects.Where(e => e.Start >= from + length))
+        {
+            e.Start -= length;
+        }
+    }
+
+    /// <summary>
+    /// A copy with only <paramref name="length"/> seconds from <paramref name="from"/> on (for the quick preview), effects moved along.
+    /// </summary>
+    public EditProject PreviewPart(double from, double length)
+    {
+        var p = Clone();
+        if (from > MinPiece)
+        {
+            p.TrimStartAt(from);
+        }
+
+        if (p.Duration > length)
+        {
+            p.TrimEndAt(length);
+        }
+
+        p.FadeIn = 0;
+        p.FadeOut = 0;
+        if (p.Music is { } m)
+        {
+            m.StartAt = Math.Max(0, m.StartAt - from);
+        }
+
+        return p;
     }
 
     /// <summary>Everything before the playhead goes (like "ripple trim start" in Premiere).</summary>
@@ -148,7 +190,20 @@ public sealed class EditProject
             return false;
         }
 
+        var removed = SegmentStart(keepFrom);
         Segments.RemoveRange(0, keepFrom);
+        foreach (var e in Effects)
+        {
+            e.Start -= removed;
+        }
+
+        Effects.RemoveAll(e => e.End <= 0.05);
+        foreach (var e in Effects.Where(e => e.Start < 0))
+        {
+            e.Duration = e.End;
+            e.Start = 0;
+        }
+
         return true;
     }
 
@@ -167,6 +222,7 @@ public sealed class EditProject
         }
 
         Segments.RemoveRange(last + 1, Segments.Count - last - 1);
+        Effects.RemoveAll(e => e.Start >= Duration - 0.05);
         return true;
     }
 

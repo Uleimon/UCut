@@ -29,7 +29,7 @@ public enum ExportQuality
 }
 
 public sealed record ExportOptions(ExportFormat Format = ExportFormat.Mp4H264, ExportSize Size = ExportSize.Original,
-                                   ExportQuality Quality = ExportQuality.High, int AudioKbps = 192)
+                                   ExportQuality Quality = ExportQuality.High, int AudioKbps = 192, string TextFont = "Arial")
 {
     public string Extension => Format == ExportFormat.Mp3 ? ".mp3" : ".mp4";
 }
@@ -37,7 +37,10 @@ public sealed record ExportOptions(ExportFormat Format = ExportFormat.Mp4H264, E
 /// <summary>Builds and runs the ffmpeg command that renders an <see cref="EditProject"/>.</summary>
 public static class EditRenderer
 {
-    public static List<string> BuildArguments(EditProject p, ExportOptions o, string output)
+    /// <summary>Name of the text-effects subtitle file, written next to the render (working directory).</summary>
+    public const string EffectsAssName = "ucut-effekte.ass";
+
+    public static List<string> BuildArguments(EditProject p, ExportOptions o, string output, bool withTextFile = false)
     {
         if (p.Segments.Count == 0 || p.Duration <= 0)
         {
@@ -57,6 +60,10 @@ public static class EditRenderer
 
             args.AddRange(["-i", music.Path]);
         }
+
+        var firstEffectInput = music is null ? 1 : 2;
+        var effects = p.Effects.Where(e => e.Duration > 0 && e.Start < p.Duration).ToList();
+        args.AddRange(EffectFilters.Inputs(effects));
 
         var n = p.Segments.Count;
         var g = new StringBuilder();
@@ -86,7 +93,17 @@ public static class EditRenderer
                 g.Append(ci, $",fade=t=out:st={F(Math.Max(0, total - p.FadeOut))}:d={F(p.FadeOut)}");
             }
 
-            g.Append(",format=yuv420p[vout];");
+            if (effects.Count > 0)
+            {
+                var (w, h) = OutputSize(o.Size, p.Width, p.Height);
+                g.Append("[vbase];");
+                g.Append(EffectFilters.Video(effects, firstEffectInput, w, h, "[vbase]", "[vfx]", withTextFile ? EffectsAssName : null));
+                g.Append("[vfx]format=yuv420p[vout];");
+            }
+            else
+            {
+                g.Append(",format=yuv420p[vout];");
+            }
         }
 
         var mixInputs = new List<string>();
@@ -119,6 +136,10 @@ public static class EditRenderer
             g.Append(ci, $"[1:a]aresample=48000,volume={F(music.Volume)},adelay={delayMs}:all=1,atrim=0:{F(total)}{fade}[mus];");
             mixInputs.Add("[mus]");
         }
+
+        var (sfxGraph, sfxLabels) = EffectFilters.Audio(effects, firstEffectInput);
+        g.Append(sfxGraph);
+        mixInputs.AddRange(sfxLabels);
 
         var hasAudio = mixInputs.Count > 0;
         if (hasAudio)
@@ -169,15 +190,17 @@ public static class EditRenderer
         return args;
     }
 
+    public static (int Width, int Height) OutputSize(ExportSize size, int srcW, int srcH) => size switch
+    {
+        ExportSize.Vertical1080 => (1080, 1920),
+        ExportSize.Vertical720 => (720, 1280),
+        ExportSize.Landscape1080 => (1920, 1080),
+        _ => (srcW - (srcW % 2), srcH - (srcH % 2)),
+    };
+
     internal static string SizeFilter(ExportSize size, int srcW, int srcH)
     {
-        var (w, h) = size switch
-        {
-            ExportSize.Vertical1080 => (1080, 1920),
-            ExportSize.Vertical720 => (720, 1280),
-            ExportSize.Landscape1080 => (1920, 1080),
-            _ => (srcW - (srcW % 2), srcH - (srcH % 2)),
-        };
+        var (w, h) = OutputSize(size, srcW, srcH);
         return size == ExportSize.Original
             ? $"scale={w}:{h},setsar=1"
             : $"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1";
@@ -187,9 +210,30 @@ public static class EditRenderer
     public static async Task RenderAsync(string ffmpegPath, EditProject project, ExportOptions options, string output,
                                          IProgress<double>? progress = null, CancellationToken ct = default)
     {
-        var args = BuildArguments(project, options, output);
+        // Text effects go through an ASS file; ffmpeg finds it by name in the working folder (no path escaping on Windows).
+        var work = Directory.CreateTempSubdirectory("ucut-export-");
+        var (w, h) = OutputSize(options.Size, project.Width, project.Height);
+        var ass = options.Format == ExportFormat.Mp4H264 ? EffectFilters.TextAss(project.Effects, w, h, options.TextFont) : null;
+        if (ass is not null)
+        {
+            await File.WriteAllTextAsync(Path.Combine(work.FullName, EffectsAssName), ass, ct).ConfigureAwait(false);
+        }
+
+        try
+        {
+            await RunAsync(ffmpegPath, BuildArguments(project, options, Path.GetFullPath(output), ass is not null), work.FullName, project.Duration, output, progress, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            try { work.Delete(recursive: true); } catch (IOException) { }
+        }
+    }
+
+    private static async Task RunAsync(string ffmpegPath, List<string> args, string workDir, double total, string output, IProgress<double>? progress, CancellationToken ct)
+    {
         var psi = new ProcessStartInfo(ffmpegPath)
         {
+            WorkingDirectory = workDir,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -211,7 +255,6 @@ public static class EditRenderer
         }
 
         var stderr = proc.StandardError.ReadToEndAsync(ct);
-        var total = project.Duration;
         try
         {
             while (await proc.StandardOutput.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
