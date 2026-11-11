@@ -85,6 +85,9 @@ internal interface IDialogs
     string? PickFolder(string title);
     IReadOnlyList<string> PickFiles(string title, string filter, bool multiple);
     string? SaveFile(string title, string fileName, string filter);
+
+    /// <summary>Asks for one line of text. Null = cancelled.</summary>
+    string? Ask(string title, string message);
 }
 
 internal sealed class WpfDialogs : IDialogs
@@ -110,6 +113,28 @@ internal sealed class WpfDialogs : IDialogs
     {
         var dlg = new Microsoft.Win32.OpenFileDialog { Title = title, Filter = filter, Multiselect = multiple };
         return dlg.ShowDialog() == true ? dlg.FileNames : [];
+    }
+
+    public string? Ask(string title, string message)
+    {
+        var box = new System.Windows.Controls.TextBox { Margin = new System.Windows.Thickness(0, 12, 0, 12), MinWidth = 460 };
+        var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, Padding = new System.Windows.Thickness(18, 6, 18, 6), Margin = new System.Windows.Thickness(0, 0, 8, 0) };
+        var cancel = new System.Windows.Controls.Button { Content = "Abbrechen", IsCancel = true, Padding = new System.Windows.Thickness(18, 6, 18, 6) };
+        var buttons = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+        buttons.Children.Add(ok);
+        buttons.Children.Add(cancel);
+        var panel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(20) };
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = message, TextWrapping = System.Windows.TextWrapping.Wrap, MaxWidth = 460 });
+        panel.Children.Add(box);
+        panel.Children.Add(buttons);
+        var window = new System.Windows.Window
+        {
+            Title = title, Content = panel, SizeToContent = System.Windows.SizeToContent.WidthAndHeight, ResizeMode = System.Windows.ResizeMode.NoResize,
+            WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner, Owner = System.Windows.Application.Current?.MainWindow,
+        };
+        ok.Click += (_, _) => window.DialogResult = true;
+        box.Loaded += (_, _) => box.Focus();
+        return window.ShowDialog() == true ? box.Text : null;
     }
 
     public string? SaveFile(string title, string fileName, string filter)

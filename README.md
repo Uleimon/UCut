@@ -15,7 +15,7 @@ Sobald Aitum Vertical einen Clip speichert, passiert Folgendes:
 
 ## Das Programm
 
-`UCut-Setup-0.2.0.exe` installiert UCut wie ein normales Programm (ohne Admin-Rechte, nach `%LOCALAPPDATA%\Programs\UCut`), mit eigenem Icon im Startmenü und auf dem Desktop. Deinstallieren geht über *Einstellungen → Apps*.
+`UCut-Setup-0.3.0.exe` installiert UCut wie ein normales Programm (ohne Admin-Rechte, nach `%LOCALAPPDATA%\Programs\UCut`), mit eigenem Icon im Startmenü und auf dem Desktop. Deinstallieren geht über *Einstellungen → Apps*.
 
 - **Clips:** Galerie aller fertigen Clips mit Vorschaubild, Filter nach Spiel, Sortierung (neueste, lustigste, Score) und Suche. Rechts läuft der Clip, darunter stehen Titel und Hashtags pro Plattform zum Bearbeiten und Kopieren.
 - **Schnittraum:** Zeitleiste mit Bildstreifen und einer Wellenform pro Tonspur. Teilen (`S`), Löschen (`Entf`), Anfang/Ende bis zur Abspielposition kürzen (`Q`/`W`), Stücke verschieben, Lautstärke und Stumm pro Spur, eine Musikspur mit Ausblenden, Ein-/Ausblenden des Bildes, Rückgängig (`Strg+Z`). Export als MP4 (H.264) in Original, 1080x1920, 720x1280 oder 1920x1080, oder nur der Ton als MP3.

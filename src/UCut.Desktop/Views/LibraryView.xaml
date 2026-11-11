@@ -191,10 +191,39 @@
                                 <TextBlock Text="Im Schnittraum bearbeiten" Foreground="White"/>
                             </StackPanel>
                         </Button>
+                        <Button Command="{Binding RedoCommand}" Margin="0,0,8,8" ToolTip="Cam von Hand setzen, ohne Cam machen oder Untertitel korrigieren">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" Margin="0,0,8,0"/>
+                                <TextBlock Text="Neu machen"/>
+                            </StackPanel>
+                        </Button>
                         <Button Style="{StaticResource IconButton}" Content="&#xE768;" ToolTip="Im Videoplayer abspielen" Command="{Binding PlayCommand}" Margin="0,0,8,8"/>
                         <Button Style="{StaticResource IconButton}" Content="&#xE838;" ToolTip="Im Ordner zeigen" Command="{Binding ShowInFolderCommand}" Margin="0,0,8,8"/>
                         <Button Style="{StaticResource IconButton}" Content="&#xE74D;" ToolTip="Clip löschen" Command="{Binding DeleteCommand}" Margin="0,0,8,8"/>
                     </WrapPanel>
+
+                    <!-- Upload -->
+                    <Border Style="{StaticResource Card}" Background="{StaticResource SurfaceBrush}" DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource H2}" Text="Hochladen"/>
+                            <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Text="Noch kein Konto verbunden. Verbinde deine Konten unter Einstellungen → Konten zum Hochladen."
+                                       Visibility="{Binding HasAccounts, Converter={StaticResource InvBoolToVis}}"/>
+                            <ItemsControl ItemsSource="{Binding UploadTargets}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" Margin="0,2"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <WrapPanel Margin="0,8,0,0">
+                                <Button Style="{StaticResource Primary}" Command="{Binding UploadNowCommand}" Margin="0,0,8,0">
+                                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE898;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="Auf ausgewählte Konten hochladen" Foreground="White"/></StackPanel>
+                                </Button>
+                                <Button Content="Konten verwalten" Command="{Binding ManageAccountsCommand}"/>
+                            </WrapPanel>
+                            <TextBlock Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,8,0,0" Text="{Binding Selected.UploadedText}"/>
+                        </StackPanel>
+                    </Border>
 
                     <!-- Texts per platform -->
                     <Border Style="{StaticResource Card}" Background="{StaticResource SurfaceBrush}">

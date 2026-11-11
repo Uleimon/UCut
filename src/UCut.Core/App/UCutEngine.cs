@@ -214,6 +214,24 @@ public sealed class UCutEngine : IDisposable
         return new TwitchSearchResult(candidates, clips.Count, clips.Count - fresh.Count);
     }
 
+    /// <summary>The original recording of a finished clip (Aitum file or Twitch download), or null when it is gone.</summary>
+    public string? FindOriginal(UCut.Library.LibraryClip clip)
+    {
+        var meta = clip.Metadata;
+        if (File.Exists(meta.SourceFile))
+        {
+            return meta.SourceFile;
+        }
+
+        if (meta.Origin is { Platform: "Twitch" } o && Directory.Exists(TwitchDownloadFolder))
+        {
+            var safeId = new string(o.Id.Select(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' ? ch : '_').ToArray());
+            return Directory.EnumerateFiles(TwitchDownloadFolder, "*_" + safeId + ".mp4").FirstOrDefault();
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Makes a finished clip again from its original: with corrected words, another layout or a cam set by hand.
     /// Texts, uploads and the file name stay.
@@ -221,19 +239,8 @@ public sealed class UCutEngine : IDisposable
     public async Task<ClipResult> RedoAsync(UCut.Library.LibraryClip clip, ProcessOptions options, CancellationToken ct = default)
     {
         var meta = clip.Metadata;
-        var source = meta.SourceFile;
-        if (!File.Exists(source) && meta.Origin is { Platform: "Twitch" } o)
-        {
-            var twitch = Directory.Exists(TwitchDownloadFolder)
-                ? Directory.EnumerateFiles(TwitchDownloadFolder, "*" + o.Id + ".mp4").FirstOrDefault()
-                : null;
-            source = twitch ?? source;
-        }
-
-        if (!File.Exists(source))
-        {
-            throw new InvalidOperationException($"Das Original ist nicht mehr da ({meta.SourceFile}). Ohne Original kann der Clip nicht neu gemacht werden.");
-        }
+        var source = FindOriginal(clip)
+                     ?? throw new InvalidOperationException($"Das Original ist nicht mehr da ({meta.SourceFile}). Ohne Original kann der Clip nicht neu gemacht werden.");
 
         var origin = meta.Origin is { } og ? new ClipOrigin(og.RecordedAt, og.Platform, og.Id, og.Url, og.Title, og.Views) : null;
         var game = new GameResult(meta.Game, meta.Game, meta.GameSource);

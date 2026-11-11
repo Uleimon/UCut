@@ -42,6 +42,22 @@ internal sealed class ClipCard(LibraryClip clip) : ObservableObject
     public string InstagramCaption { get => Clip.Metadata.Instagram.Caption; set { Clip.Metadata.Instagram.Caption = value; Dirty = true; } }
 
     public bool Dirty { get; set; }
+
+    public string UploadedText => Clip.Metadata.Uploaded.Count == 0
+        ? "Noch nirgends hochgeladen."
+        : string.Join("\n", Clip.Metadata.Uploaded.Select(u => $"{u.Key}: {u.Value}"));
+
+    public void RefreshUploads() => OnPropertyChanged(nameof(UploadedText));
+}
+
+/// <summary>A connected account in the upload box of the details panel.</summary>
+internal sealed class UploadTarget(UCut.Upload.UploadAccount account, bool isChecked) : ObservableObject
+{
+    private bool _isChecked = isChecked;
+
+    public UCut.Upload.UploadAccount Account { get; } = account;
+    public string Label => Account.Label;
+    public bool IsChecked { get => _isChecked; set => Set(ref _isChecked, value); }
 }
 
 /// <summary>Gallery of finished clips: filter by game, sort, search, details with player and texts.</summary>
@@ -123,6 +139,9 @@ internal sealed class LibraryViewModel : ObservableObject
             });
             _main.Log.Write("Hochladen: Clip in den Browser ziehen, Text mit Strg+V einfügen.");
         }, _ => Selected is not null);
+        RedoCommand = new RelayCommand(_ => Redo(), _ => Selected is not null && !_main.JobRunning);
+        UploadNowCommand = new AsyncCommand(UploadNowAsync, () => Selected is not null && !_main.JobRunning && UploadTargets.Any(t => t.IsChecked));
+        ManageAccountsCommand = new RelayCommand(_ => _main.Page = "settings");
         DeleteCommand = new RelayCommand(_ =>
         {
             if (Selected is { } c && _main.Dialogs.Confirm("Clip löschen", $"„{c.Title}“ wirklich löschen?\nVideo, Infodatei und Vorschaubild werden entfernt.", true))
@@ -146,6 +165,11 @@ internal sealed class LibraryViewModel : ObservableObject
     public RelayCommand SaveTextsCommand { get; }
     public RelayCommand CopyCommand { get; }
     public RelayCommand UploadCommand { get; }
+    public RelayCommand RedoCommand { get; }
+    public AsyncCommand UploadNowCommand { get; }
+    public RelayCommand ManageAccountsCommand { get; }
+    public ObservableCollection<UploadTarget> UploadTargets { get; } = [];
+    public bool HasAccounts => UploadTargets.Count > 0;
     public RelayCommand DeleteCommand { get; }
 
     public string Game { get => _game; set { if (Set(ref _game, value ?? AllGames)) { ApplyFilter(); } } }
@@ -169,6 +193,7 @@ internal sealed class LibraryViewModel : ObservableObject
                 }
 
                 OnPropertyChanged(nameof(HasSelection));
+                RefreshTargets();
             }
         }
     }
@@ -176,6 +201,76 @@ internal sealed class LibraryViewModel : ObservableObject
     public bool HasSelection => Selected is not null;
     public bool IsEmpty => _all.Count == 0;
     public string CountText => $"{Clips.Count} Clip{(Clips.Count == 1 ? "" : "s")}";
+
+    /// <summary>Connected accounts as checkboxes; what was ticked stays ticked for the next clip.</summary>
+    public void RefreshTargets()
+    {
+        var ticked = UploadTargets.Where(t => t.IsChecked).Select(t => t.Account.Id).ToHashSet();
+        UploadTargets.Clear();
+        foreach (var a in _main.Engine.Uploads.Accounts.Accounts.OrderBy(a => a.Platform).ThenBy(a => a.Name))
+        {
+            UploadTargets.Add(new UploadTarget(a, ticked.Contains(a.Id)));
+        }
+
+        OnPropertyChanged(nameof(HasAccounts));
+    }
+
+    private async Task UploadNowAsync()
+    {
+        if (Selected is not { } card)
+        {
+            return;
+        }
+
+        SaveSelected();
+        var targets = UploadTargets.Where(t => t.IsChecked).Select(t => t.Account).ToList();
+        var engine = _main.Engine;
+        IReadOnlyList<UCut.Upload.UploadOutcome> outcomes = [];
+        await _main.RunJobAsync($"\"{card.Title}\" wird hochgeladen", async (progress, ct) =>
+        {
+            var p = new Progress<(UCut.Upload.UploadAccount Account, double Share)>(x =>
+                progress.Report(new UCut.App.BatchProgress(targets.IndexOf(x.Account), targets.Count, $"{x.Account.Label} {x.Share:P0}")));
+            outcomes = await engine.Uploads.UploadAsync(card.Clip, targets, p, ct);
+            return new UCut.App.BatchResult(outcomes.Count(o => o.Error is null), outcomes.Count(o => o.Error is not null), false);
+        }, _ =>
+        {
+            card.RefreshUploads();
+            var lines = outcomes.Select(o => o.Error is null
+                ? $"✓ {o.Account.Label}: {o.Result!.Note}"
+                : $"✗ {o.Account.Label}: {o.Error}");
+            _main.Dialogs.Info("Hochladen", string.Join("\n\n", lines));
+        });
+    }
+
+    private void Redo()
+    {
+        if (Selected is not { } card)
+        {
+            return;
+        }
+
+        SaveSelected();
+        var vm = new RedoViewModel(_main, card.Clip);
+        var window = new Views.RedoWindow(vm) { Owner = Application.Current?.MainWindow };
+        if (window.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var options = vm.BuildOptions();
+        var engine = _main.Engine;
+        _ = _main.RunJobAsync($"\"{card.Title}\" wird neu gemacht", async (progress, ct) =>
+        {
+            progress.Report(new UCut.App.BatchProgress(0, 1, card.Title));
+            await engine.RedoAsync(card.Clip, options, ct);
+            return new UCut.App.BatchResult(1, 0, false);
+        }, _ =>
+        {
+            // New picture: forget the old card (and its thumbnail) so it is loaded fresh.
+            _all.Remove(card);
+            Refresh();
+        });
+    }
 
     public void Refresh()
     {
@@ -201,6 +296,7 @@ internal sealed class LibraryViewModel : ObservableObject
         ApplyFilter();
         Selected = selectedPath is null ? null : Clips.FirstOrDefault(c => string.Equals(c.Clip.VideoPath, selectedPath, StringComparison.OrdinalIgnoreCase));
         OnPropertyChanged(nameof(IsEmpty));
+        RefreshTargets();
         _ = LoadThumbnailsAsync(++_loadGeneration);
     }
 

@@ -2,6 +2,7 @@ using System.IO;
 using UCut.App;
 using UCut.Editing;
 using UCut.Settings;
+using UCut.Upload;
 
 namespace UCut.Desktop.ViewModels;
 
@@ -20,6 +21,31 @@ internal sealed class SettingsViewModel : ObservableObject
         _main = main;
         Load();
         SaveCommand = new RelayCommand(_ => Save());
+        ConnectCommand = new AsyncCommand(async p =>
+        {
+            if (p is not string name || !Enum.TryParse<UploadPlatform>(name, out var platform) || !Save())
+            {
+                return;
+            }
+
+            var account = await _main.Engine.Uploads.ConnectAsync(platform, new AuthUi(_main.Dialogs));
+            RefreshAccounts();
+            _main.Dialogs.Info("Konto verbunden", $"{account.Label} ist verbunden.");
+        });
+        RemoveAccountCommand = new RelayCommand(p =>
+        {
+            if (p is AccountItem a && _main.Dialogs.Confirm("Konto entfernen", $"{a.Label} aus UCut entfernen? Du kannst es jederzeit neu verbinden."))
+            {
+                _main.Engine.Uploads.Accounts.Remove(a.Id);
+                RefreshAccounts();
+            }
+        });
+        DevConsoleCommand = new RelayCommand(p => Shell.Open(p switch
+        {
+            "YouTube" => "https://console.cloud.google.com/apis/credentials",
+            "TikTok" => "https://developers.tiktok.com/apps/",
+            _ => "https://developers.facebook.com/apps/",
+        }));
         ReloadCommand = new RelayCommand(_ => Load());
         OpenFileCommand = new RelayCommand(_ => Shell.Open(_main.SettingsPath));
         BrowseCommand = new RelayCommand(p =>
@@ -44,6 +70,46 @@ internal sealed class SettingsViewModel : ObservableObject
     }
 
     public RelayCommand SaveCommand { get; }
+    public AsyncCommand ConnectCommand { get; }
+    public RelayCommand RemoveAccountCommand { get; }
+    public RelayCommand DevConsoleCommand { get; }
+    public System.Collections.ObjectModel.ObservableCollection<AccountItem> Accounts { get; } = [];
+
+    public string YouTubeClientId { get => _s.Upload.YouTubeClientId; set { _s.Upload.YouTubeClientId = value.Trim(); OnPropertyChanged(); } }
+    public string YouTubeClientSecret { get => _s.Upload.YouTubeClientSecret; set { _s.Upload.YouTubeClientSecret = value.Trim(); OnPropertyChanged(); } }
+    public string TikTokClientKey { get => _s.Upload.TikTokClientKey; set { _s.Upload.TikTokClientKey = value.Trim(); OnPropertyChanged(); } }
+    public string TikTokClientSecret { get => _s.Upload.TikTokClientSecret; set { _s.Upload.TikTokClientSecret = value.Trim(); OnPropertyChanged(); } }
+    public string InstagramAppId { get => _s.Upload.InstagramAppId; set { _s.Upload.InstagramAppId = value.Trim(); OnPropertyChanged(); } }
+    public string InstagramAppSecret { get => _s.Upload.InstagramAppSecret; set { _s.Upload.InstagramAppSecret = value.Trim(); OnPropertyChanged(); } }
+    public string CallbackAddress => $"http://127.0.0.1:{_s.Upload.CallbackPort}/callback/";
+
+    public IReadOnlyList<Choice<string>> YouTubePrivacies { get; } =
+        [new("private", "Privat (bis Google die App geprüft hat, geht nur das)"), new("unlisted", "Nicht gelistet"), new("public", "Öffentlich")];
+
+    public Choice<string> YouTubePrivacy
+    {
+        get => YouTubePrivacies.FirstOrDefault(c => c.Value == _s.Upload.YouTubePrivacy) ?? YouTubePrivacies[0];
+        set { _s.Upload.YouTubePrivacy = value.Value; OnPropertyChanged(); }
+    }
+
+    public IReadOnlyList<Choice<string>> TikTokModes { get; } =
+        [new("inbox", "Als Entwurf in die TikTok-App (dort posten)"), new("direct", "Direkt posten (privat, bis TikTok die App geprüft hat)")];
+
+    public Choice<string> TikTokMode
+    {
+        get => TikTokModes.FirstOrDefault(c => c.Value == _s.Upload.TikTokMode) ?? TikTokModes[0];
+        set { _s.Upload.TikTokMode = value.Value; OnPropertyChanged(); }
+    }
+
+    public void RefreshAccounts()
+    {
+        Accounts.Clear();
+        foreach (var a in _main.Engine.Uploads.Accounts.Accounts.OrderBy(a => a.Platform).ThenBy(a => a.Name))
+        {
+            Accounts.Add(new AccountItem(a));
+        }
+    }
+
     public RelayCommand ReloadCommand { get; }
     public RelayCommand OpenFileCommand { get; }
     public RelayCommand BrowseCommand { get; }
@@ -114,14 +180,16 @@ internal sealed class SettingsViewModel : ObservableObject
         {
             OnPropertyChanged(p.Name);
         }
+
+        RefreshAccounts();
     }
 
-    private void Save()
+    private bool Save()
     {
         if (string.IsNullOrWhiteSpace(_s.OutputFolder))
         {
             _main.Dialogs.Info("Einstellungen", "Bitte einen Ausgabeordner wählen.");
-            return;
+            return false;
         }
 
         try
@@ -138,10 +206,12 @@ internal sealed class SettingsViewModel : ObservableObject
             _main.ReloadEngine();
             _main.Twitch.Refresh();
             _main.Log.Write("Einstellungen gespeichert.");
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
             _main.Dialogs.Info("Einstellungen", $"Speichern fehlgeschlagen: {ex.Message}");
+            return false;
         }
     }
 
@@ -155,4 +225,21 @@ internal sealed class SettingsViewModel : ObservableObject
         var dir = Path.GetDirectoryName(ffmpeg);
         return string.IsNullOrEmpty(dir) ? "ffprobe" : Path.Combine(dir, "ffprobe" + Path.GetExtension(ffmpeg));
     }
+}
+
+internal sealed class AccountItem(UploadAccount account)
+{
+    public string Id => account.Id;
+    public string Label => account.Label;
+    public string Platform => UploadAccount.PlatformName(account.Platform);
+    public string Name => account.Name;
+    public UploadAccount Account => account;
+}
+
+/// <summary>Sign-in helpers for the uploaders: browser and a paste box (Instagram).</summary>
+internal sealed class AuthUi(IDialogs dialogs) : IAuthUi
+{
+    public void OpenBrowser(string url) => Shell.Open(url);
+
+    public Task<string?> AskAsync(string title, string message) => Task.FromResult(dialogs.Ask(title, message));
 }

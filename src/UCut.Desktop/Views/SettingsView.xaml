@@ -82,6 +82,64 @@
 
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
+                        <TextBlock Style="{StaticResource H2}" Text="Konten zum Hochladen"/>
+                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
+                                   Text="Jede Plattform braucht einmal eine eigene Entwickler-App (Anleitung in deiner To-do-Liste). App-Daten eintragen, dann „Konto verbinden“. Mehrere Konten pro Plattform sind möglich: einfach noch einmal verbinden und im Browser mit dem anderen Konto anmelden."/>
+
+                        <ItemsControl ItemsSource="{Binding Accounts}" Margin="0,10,0,4">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource Chip}" Margin="0,0,0,6" HorizontalAlignment="Left">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Label}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            <Button Style="{StaticResource IconButton}" Content="&#xE711;" ToolTip="Konto entfernen" Padding="4" Margin="0"
+                                                    Command="{Binding DataContext.RemoveAccountCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Style="{StaticResource H2}" Text="YouTube" FontSize="15" Margin="0,12,0,0"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Client-ID (Google Cloud, Typ Desktop-App)"/>
+                        <TextBox Text="{Binding YouTubeClientId}"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Clientschlüssel"/>
+                        <TextBox Text="{Binding YouTubeClientSecret}" FontFamily="Consolas"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Sichtbarkeit"/>
+                        <ComboBox ItemsSource="{Binding YouTubePrivacies}" SelectedItem="{Binding YouTubePrivacy}" DisplayMemberPath="Label"/>
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Style="{StaticResource Primary}" Content="YouTube-Konto verbinden" Command="{Binding ConnectCommand}" CommandParameter="YouTube"/>
+                            <Button Content="Google Cloud öffnen" Command="{Binding DevConsoleCommand}" CommandParameter="YouTube"/>
+                        </WrapPanel>
+
+                        <TextBlock Style="{StaticResource H2}" Text="TikTok" FontSize="15" Margin="0,16,0,0"/>
+                        <TextBlock Style="{StaticResource Field}">
+                            <Run Text="Client Key (TikTok-App, Redirect-URI: "/><Run Text="{Binding CallbackAddress, Mode=OneWay}" FontFamily="Consolas"/><Run Text=")"/>
+                        </TextBlock>
+                        <TextBox Text="{Binding TikTokClientKey}"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Client Secret"/>
+                        <TextBox Text="{Binding TikTokClientSecret}" FontFamily="Consolas"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Art"/>
+                        <ComboBox ItemsSource="{Binding TikTokModes}" SelectedItem="{Binding TikTokMode}" DisplayMemberPath="Label"/>
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Style="{StaticResource Primary}" Content="TikTok-Konto verbinden" Command="{Binding ConnectCommand}" CommandParameter="TikTok"/>
+                            <Button Content="TikTok for Developers öffnen" Command="{Binding DevConsoleCommand}" CommandParameter="TikTok"/>
+                        </WrapPanel>
+
+                        <TextBlock Style="{StaticResource H2}" Text="Instagram" FontSize="15" Margin="0,16,0,0"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Instagram-App-ID (nicht die Facebook-App-ID; Redirect-URI: https://localhost/)"/>
+                        <TextBox Text="{Binding InstagramAppId}"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Instagram-App-Geheimschlüssel"/>
+                        <TextBox Text="{Binding InstagramAppSecret}" FontFamily="Consolas"/>
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Style="{StaticResource Primary}" Content="Instagram-Konto verbinden" Command="{Binding ConnectCommand}" CommandParameter="Instagram"/>
+                            <Button Content="Meta for Developers öffnen" Command="{Binding DevConsoleCommand}" CommandParameter="Instagram"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
                         <TextBlock Style="{StaticResource H2}" Text="Clips fertig machen"/>
                         <TextBlock Style="{StaticResource Field}" Text="Querformat ins Hochformat"/>
                         <ComboBox ItemsSource="{Binding ReframeModes}" SelectedItem="{Binding ReframeMode}" HorizontalAlignment="Left" MinWidth="360"/>

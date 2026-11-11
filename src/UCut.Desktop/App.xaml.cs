@@ -97,6 +97,44 @@ public partial class App : Application
                 window.UpdateLayout();
                 await Task.Delay(500);
                 Console.Out.WriteLine($"import ok: {main.Import.Items.Count} item(s)");
+
+                // A finished clip in the gallery: details with upload box, then the "Neu machen" dialog with a cam drawn.
+                var gameDir = Path.Combine(main.Engine.Settings.OutputFolder, "Test");
+                Directory.CreateDirectory(gameDir);
+                var clipPath = Path.Combine(gameDir, "2026-01-01_120000_selbsttest.mp4");
+                File.Copy(video, clipPath, overwrite: true);
+                var meta = new UCut.Metadata.ClipMetadata
+                {
+                    Video = Path.GetFileName(clipPath), SourceFile = video, Game = "Test", CreatedAt = DateTimeOffset.Now, DurationSeconds = 4,
+                    Edit = new UCut.Metadata.EditInfo { CutStart = 0, CutEnd = 4, Mode = "Crop", Words = [new() { Text = "Hallo", Start = 0.2, End = 0.6 }] },
+                };
+                meta.YouTube.Title = "Selbsttest";
+                meta.Uploaded["YouTube: Test"] = "https://youtube.com/shorts/x";
+                meta.Save(Path.ChangeExtension(clipPath, ".json"));
+                main.Page = "library";
+                main.Library.Refresh();
+                main.Library.Selected = main.Library.Clips.FirstOrDefault();
+                window.UpdateLayout();
+                await Task.Delay(800);
+                Console.Out.WriteLine($"library ok: {main.Library.Clips.Count} clip(s), {main.Library.UploadTargets.Count} konto(s)");
+
+                var redoVm = new RedoViewModel(main, main.Library.Selected!.Clip);
+                var redo = new Views.RedoWindow(redoVm) { Owner = window };
+                redo.Show();
+                for (var i = 0; i < 40 && redoVm.Frame is null && redoVm.Status.Length == 0; i++)
+                {
+                    await Task.Delay(250);
+                }
+
+                redo.SetCamForTest(new UCut.Editing.NormRect(0.7, 0.65, 0.28, 0.3));
+                redo.UpdateLayout();
+                var ready = redoVm.CanRun(out var why);
+                redo.Close();
+                Console.Out.WriteLine($"redo ok: landscape={redoVm.IsLandscape}, frame={redoVm.Frame is not null}, words={redoVm.Words.Count}, ready={ready} {why} {redoVm.Status}");
+                if (redoVm.Frame is null || !ready)
+                {
+                    throw new InvalidOperationException("Neu-machen-Dialog: kein Standbild oder nicht bereit");
+                }
             }
 
             // Twitch preview panel with a fake clip; yt-dlp is missing here, so it must show an error text, not crash.
