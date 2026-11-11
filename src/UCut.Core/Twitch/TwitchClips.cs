@@ -29,8 +29,15 @@ public sealed class TwitchClipSearch(TwitchApi api, Action<string>? log = null)
     {
         var id = await api.GetBroadcasterIdAsync(ct).ConfigureAwait(false);
         var clips = new Dictionary<string, TwitchClip>(StringComparer.Ordinal);
+        var lastYear = 0;
         foreach (var (start, end) in MonthWindows(from, to))
         {
+            if (start.Year != lastYear)
+            {
+                lastYear = start.Year;
+                log?.Invoke($"  {lastYear} ... ({clips.Count} Clips bisher)");
+            }
+
             string? cursor = null;
             var pages = 0;
             do
