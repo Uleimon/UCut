@@ -16,6 +16,9 @@ public sealed record TwitchClip(
     string CreatorName)
 {
     public string? GameName { get; init; }
+
+    /// <summary>Preview picture from Twitch.</summary>
+    public string ThumbnailUrl { get; init; } = "";
 }
 
 /// <summary>Lists all clips of the channel in a time range via Helix (GET /clips) and resolves game names.</summary>
@@ -110,7 +113,10 @@ public sealed class TwitchClipSearch(TwitchApi api, Action<string>? log = null)
                 c.GetProperty("created_at").GetDateTimeOffset(),
                 c.TryGetProperty("duration", out var d) ? d.GetDouble() : 0,
                 c.TryGetProperty("game_id", out var g) ? g.GetString() ?? "" : "",
-                c.TryGetProperty("creator_name", out var cr) ? cr.GetString() ?? "" : ""));
+                c.TryGetProperty("creator_name", out var cr) ? cr.GetString() ?? "" : "")
+            {
+                ThumbnailUrl = c.TryGetProperty("thumbnail_url", out var th) ? th.GetString() ?? "" : "",
+            });
         }
 
         string? cursor = null;
@@ -147,6 +153,10 @@ public static class FunnyFilter
         }
 
         var byViews = clips.OrderBy(c => c.ViewCount).ToList();
+
+        // Twitch gives a clip the stream title unless the clipper types a new one. A title that several clips share is
+        // the stream title ("Was spiel ich hier alter ... !clip") and says nothing about the moment, so its words do not count.
+        var titleCounts = clips.GroupBy(c => c.Title.Trim(), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
         var result = new List<ClipCandidate>();
         foreach (var clip in clips)
         {
@@ -158,7 +168,10 @@ public static class FunnyFilter
             var reasons = new List<string>();
             var hint = 0.0;
 
-            var words = settings.FunnyWords.Where(w => ContainsWord(clip.Title, w)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var ownTitle = titleCounts.GetValueOrDefault(clip.Title.Trim()) < 3;
+            var words = ownTitle
+                ? settings.FunnyWords.Where(w => ContainsWord(clip.Title, w)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+                : [];
             if (words.Count > 0)
             {
                 hint += Math.Min(2, words.Count) * 3;
@@ -166,7 +179,7 @@ public static class FunnyFilter
             }
 
             // Share of clips with fewer views (0 = least watched, 1 = most watched).
-            var rank = clips.Count == 1 ? 1.0 : (double)byViews.FindLastIndex(c => c.ViewCount <= clip.ViewCount) / (clips.Count - 1);
+            var rank = clips.Count == 1 ? 1.0 : (double)byViews.FindIndex(c => c.ViewCount >= clip.ViewCount) / (clips.Count - 1);
             hint += rank * 4;
             var topViews = rank >= 1 - settings.TopViewsShare;
             if (topViews)

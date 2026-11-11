@@ -1,0 +1,243 @@
+<UserControl x:Class="UCut.Desktop.Views.LibraryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:UCut.Desktop">
+    <UserControl.Resources>
+        <local:EqualsConverter x:Key="Eq"/>
+        <local:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <local:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True"/>
+        <local:NullToVisibilityConverter x:Key="NullToVis"/>
+        <Style x:Key="SectionBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="AcceptsReturn" Value="True"/>
+            <Setter Property="VerticalContentAlignment" Value="Top"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+    </UserControl.Resources>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Gallery -->
+        <DockPanel Margin="24,20,12,0">
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,14">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Border Background="{StaticResource Surface2Brush}" CornerRadius="8" Width="240" Margin="0,0,8,0">
+                        <DockPanel>
+                            <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Foreground="{StaticResource SubtleTextBrush}" Margin="10,0,0,0"/>
+                            <TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" ToolTip="Titel oder gesprochener Text"/>
+                        </DockPanel>
+                    </Border>
+                    <Button Style="{StaticResource IconButton}" Content="&#xE72C;" ToolTip="Neu laden" Command="{Binding RefreshCommand}"/>
+                    <Button Style="{StaticResource IconButton}" Content="&#xE838;" ToolTip="Ausgabeordner öffnen" Command="{Binding OpenOutputCommand}"/>
+                    <Button Style="{StaticResource Primary}" Command="{Binding AddClipsCommand}" Margin="0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE710;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/>
+                            <TextBlock Text="Clips hinzufügen" Foreground="White"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource H1}" Text="Deine Clips"/>
+                    <TextBlock Style="{StaticResource Subtle}" Text="{Binding CountText}" Margin="12,6,0,0" FontSize="14"/>
+                </StackPanel>
+            </DockPanel>
+
+            <!-- Game filter + sorting -->
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <RadioButton Style="{StaticResource FilterChip}" GroupName="sort" Content="Neueste" IsChecked="{Binding Sort, Converter={StaticResource Eq}, ConverterParameter=new}"/>
+                    <RadioButton Style="{StaticResource FilterChip}" GroupName="sort" Content="😂 Lustigste" IsChecked="{Binding Sort, Converter={StaticResource Eq}, ConverterParameter=funny}"/>
+                    <RadioButton Style="{StaticResource FilterChip}" GroupName="sort" Content="Bester Score" IsChecked="{Binding Sort, Converter={StaticResource Eq}, ConverterParameter=score}" Margin="0,0,0,8"/>
+                </StackPanel>
+                <ListBox ItemsSource="{Binding Games}" SelectedItem="{Binding Game}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="Bd" CornerRadius="16" Padding="14,6" Margin="0,0,8,8" Background="{StaticResource Surface2Brush}">
+                                            <TextBlock Text="{Binding}"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentBrush}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                </ListBox>
+            </DockPanel>
+
+            <Grid>
+                <!-- Empty state -->
+                <Border Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" BorderBrush="{StaticResource LineBrush}" BorderThickness="2"
+                        CornerRadius="16" Margin="0,8,12,24">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock Text="&#xE8B2;" FontFamily="{StaticResource Icons}" FontSize="56" HorizontalAlignment="Center" Foreground="{StaticResource SubtleTextBrush}"/>
+                        <TextBlock Text="Noch keine Clips" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,12,0,4"/>
+                        <TextBlock Style="{StaticResource Subtle}" FontSize="13" HorizontalAlignment="Center"
+                                   Text="Zieh Videos hier rein, lade alte Twitch-Clips oder schalte unten links „Auto“ für deinen Aitum-Ordner an."/>
+                    </StackPanel>
+                </Border>
+
+                <ListBox x:Name="Gallery" ItemsSource="{Binding Clips}" SelectedItem="{Binding Selected}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" Visibility="{Binding IsEmpty, Converter={StaticResource InvBoolToVis}}"
+                         VirtualizingPanel.IsVirtualizing="False">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="Bd" CornerRadius="12" Margin="0,0,14,14" BorderThickness="2" BorderBrush="Transparent" Background="{StaticResource SurfaceBrush}">
+                                            <ContentPresenter/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource HoverBrush}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Width="176">
+                                <Grid Height="300" ClipToBounds="True">
+                                    <Border CornerRadius="10,10,0,0" Background="#08090C">
+                                        <Border.Clip>
+                                            <RectangleGeometry Rect="0,0,176,300" RadiusX="10" RadiusY="10"/>
+                                        </Border.Clip>
+                                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
+                                    </Border>
+                                    <Border Style="{StaticResource Chip}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8"
+                                            Visibility="{Binding FunnyText, Converter={StaticResource NullToVis}}">
+                                        <TextBlock Text="{Binding FunnyText}" FontWeight="SemiBold" Foreground="{StaticResource FunBrush}"/>
+                                    </Border>
+                                    <Border Style="{StaticResource Chip}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" ToolTip="UCut-Score">
+                                        <TextBlock Text="{Binding Score}" FontWeight="SemiBold"/>
+                                    </Border>
+                                    <Border Style="{StaticResource Chip}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8">
+                                        <TextBlock Text="{Binding DurationText}" FontSize="11"/>
+                                    </Border>
+                                </Grid>
+                                <StackPanel Margin="10,8,10,10">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" ToolTip="{Binding Title}"/>
+                                    <TextBlock Style="{StaticResource Subtle}" Margin="0,2,0,0">
+                                        <Run Text="{Binding Game, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding DateText, Mode=OneWay}"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </DockPanel>
+
+        <!-- Details -->
+        <Border Grid.Column="1" Width="420" Background="{StaticResource SidebarBrush}" Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="20" DataContext="{Binding Selected}">
+                    <Grid Height="460" Background="Black">
+                        <MediaElement x:Name="Player" Source="{Binding VideoUri}" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform"
+                                      MediaOpened="OnMediaOpened" MediaEnded="OnMediaEnded"/>
+                        <Button x:Name="PlayButton" Style="{StaticResource IconButton}" Content="&#xE769;" Click="OnPlayPause"
+                                HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Background="#AA000000"/>
+                    </Grid>
+                    <Slider x:Name="Seek" Margin="0,6,0,0" Minimum="0" Maximum="1" PreviewMouseUp="OnSeek" IsMoveToPointEnabled="True"/>
+
+                    <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold" Margin="0,10,0,4" TextWrapping="Wrap"/>
+                    <TextBlock Style="{StaticResource Subtle}" TextWrapping="Wrap">
+                        <Run Text="{Binding Game, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding DateText, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding SourceText, Mode=OneWay}"/>
+                    </TextBlock>
+                    <WrapPanel Margin="0,10,0,0">
+                        <Border Style="{StaticResource Chip}" Background="{StaticResource Surface2Brush}">
+                            <TextBlock><Run Text="Score "/><Run Text="{Binding Score, Mode=OneWay}" FontWeight="Bold"/><Run Text="/100"/></TextBlock>
+                        </Border>
+                        <Border Style="{StaticResource Chip}" Background="{StaticResource Surface2Brush}" Visibility="{Binding FunnyText, Converter={StaticResource NullToVis}}">
+                            <TextBlock Text="{Binding FunnyText}" Foreground="{StaticResource FunBrush}" FontWeight="SemiBold"/>
+                        </Border>
+                        <Border Style="{StaticResource Chip}" Background="{StaticResource Surface2Brush}" Visibility="{Binding Layout, Converter={StaticResource NullToVis}}">
+                            <TextBlock Text="{Binding Layout}"/>
+                        </Border>
+                    </WrapPanel>
+                    <TextBlock Style="{StaticResource Hint}" Text="{Binding FunnyReason}" Visibility="{Binding FunnyReason, Converter={StaticResource NullToVis}}"/>
+
+                    <WrapPanel Margin="0,12,0,4" DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                        <Button Style="{StaticResource Primary}" Command="{Binding EditCommand}" Margin="0,0,8,8">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8C6;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/>
+                                <TextBlock Text="Im Schnittraum bearbeiten" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource IconButton}" Content="&#xE768;" ToolTip="Im Videoplayer abspielen" Command="{Binding PlayCommand}" Margin="0,0,8,8"/>
+                        <Button Style="{StaticResource IconButton}" Content="&#xE838;" ToolTip="Im Ordner zeigen" Command="{Binding ShowInFolderCommand}" Margin="0,0,8,8"/>
+                        <Button Style="{StaticResource IconButton}" Content="&#xE74D;" ToolTip="Clip löschen" Command="{Binding DeleteCommand}" Margin="0,0,8,8"/>
+                    </WrapPanel>
+
+                    <!-- Texts per platform -->
+                    <Border Style="{StaticResource Card}" Background="{StaticResource SurfaceBrush}">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,6">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8C8;" ToolTip="Kopieren" Margin="0" Padding="8,4"
+                                        Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="tiktok"/>
+                                <TextBlock Style="{StaticResource H2}" Text="TikTok" Margin="0"/>
+                            </DockPanel>
+                            <TextBox Style="{StaticResource SectionBox}" Text="{Binding TikTokCaption, UpdateSourceTrigger=PropertyChanged}" MinHeight="70"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,6">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8C8;" ToolTip="Kopieren" Margin="0" Padding="8,4"
+                                        Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="youtube"/>
+                                <TextBlock Style="{StaticResource H2}" Text="YouTube Shorts" Margin="0"/>
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource Subtle}" Text="Titel"/>
+                            <TextBox Style="{StaticResource SectionBox}" AcceptsReturn="False" Text="{Binding YouTubeTitle, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBlock Style="{StaticResource Subtle}" Text="Beschreibung"/>
+                            <TextBox Style="{StaticResource SectionBox}" Text="{Binding YouTubeDescription, UpdateSourceTrigger=PropertyChanged}" MinHeight="60"/>
+                            <TextBlock Style="{StaticResource Subtle}" Text="Tags"/>
+                            <TextBox Style="{StaticResource SectionBox}" Text="{Binding YouTubeTags, UpdateSourceTrigger=LostFocus}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,6">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8C8;" ToolTip="Kopieren" Margin="0" Padding="8,4"
+                                        Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="instagram"/>
+                                <TextBlock Style="{StaticResource H2}" Text="Instagram Reels" Margin="0"/>
+                            </DockPanel>
+                            <TextBox Style="{StaticResource SectionBox}" Text="{Binding InstagramCaption, UpdateSourceTrigger=PropertyChanged}" MinHeight="60"/>
+                        </StackPanel>
+                    </Border>
+                    <Button Content="Texte speichern" HorizontalAlignment="Left"
+                            Command="{Binding DataContext.SaveTextsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                    <TextBlock Style="{StaticResource Hint}" Text="Änderungen werden auch beim Wechsel zu einem anderen Clip gespeichert. Gesprochener Text:"/>
+                    <TextBlock Style="{StaticResource Hint}" Text="{Binding Transcript}" FontStyle="Italic"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

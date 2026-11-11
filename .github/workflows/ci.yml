@@ -39,3 +39,19 @@ jobs:
           if grep -q 'outcome="NotExecuted"' TestResults/*.trx; then
             echo "::error::Tests wurden übersprungen"; exit 1
           fi
+      - name: Oberfläche zeigt jede Seite fehlerfrei an (Selbsttest)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force TestResults | Out-Null
+          $video = Join-Path $env:RUNNER_TEMP "selftest.mp4"
+          ffmpeg -v error -y -f lavfi -i testsrc2=size=1280x720:rate=30:duration=4 -f lavfi -i sine=frequency=440:duration=4 -f lavfi -i sine=frequency=880:duration=4 -map 0 -map 1 -map 2 -c:v libx264 -pix_fmt yuv420p -c:a aac $video
+          $env:UCUT_SELFTEST_VIDEO = $video
+          $p = Start-Process -FilePath "src\UCut.Desktop\bin\Release\net10.0-windows\UCut.exe" -ArgumentList "--ui-selftest" -PassThru -RedirectStandardOutput TestResults\ui-selftest.txt -RedirectStandardError TestResults\ui-selftest-err.txt
+          $done = $p.WaitForExit(120000)
+          if (-not $done) { Stop-Process -Id $p.Id; Start-Sleep -Seconds 1 }
+          Get-Content TestResults\ui-selftest.txt
+          Get-Content TestResults\ui-selftest-err.txt -TotalCount 80
+          if (-not $done) { Write-Error "Selbsttest hängt"; exit 1 }
+          if ($p.ExitCode -ne 0) { Write-Error "Selbsttest fehlgeschlagen (Code $($p.ExitCode))"; exit 1 }
+          if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'cutroom ok' -Quiet)) { Write-Error "Schnittraum wurde nicht getestet"; exit 1 }

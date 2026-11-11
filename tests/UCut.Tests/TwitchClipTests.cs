@@ -104,6 +104,23 @@ public class TwitchClipTests
     }
 
     [Fact]
+    public void Stream_Titel_zaehlt_nicht_als_lustig()
+    {
+        var clips = new List<TwitchClip>
+        {
+            Clip("1", "Was spiel ich hier alter !clip", 1),
+            Clip("2", "Was spiel ich hier alter !clip", 2),
+            Clip("3", "Was spiel ich hier alter !clip", 1),
+            Clip("4", "Der Ausraster XD", 1),
+            Clip("5", "Normal", 2),
+            Clip("6", "Normal 2", 2),
+            Clip("7", "Viel geschaut", 900),
+        };
+        var ranked = FunnyFilter.Rank(clips, new TwitchClipSettings());
+        Assert.Equal(["4", "7"], ranked.Select(c => c.Clip.Id).Order());
+    }
+
+    [Fact]
     public void Archiv_merkt_sich_geladene_Clips_und_schreibt_Uebersicht()
     {
         var dir = Directory.CreateTempSubdirectory("ucut-archiv-");

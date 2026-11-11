@@ -4,7 +4,11 @@ using System.Text.RegularExpressions;
 
 namespace UCut.Media;
 
-public sealed record VideoInfo(int Width, int Height, double DurationSeconds, bool HasAudio);
+public sealed record VideoInfo(int Width, int Height, double DurationSeconds, bool HasAudio)
+{
+    /// <summary>One name per audio stream (OBS track title or "Audio 1", "Audio 2", ...).</summary>
+    public IReadOnlyList<string> AudioTracks { get; init; } = [];
+}
 
 /// <summary>Loudness of the clip over time (momentary loudness in LUFS, one value per 0.1 s).</summary>
 public sealed record LoudnessProfile(IReadOnlyList<(double Time, double Lufs)> Points);
@@ -17,7 +21,7 @@ public sealed partial class Ffmpeg(string ffmpegPath, string ffprobePath)
     public async Task<VideoInfo> ProbeAsync(string file, CancellationToken ct = default)
     {
         var r = await ProcessRunner.RunCheckedAsync(ffprobePath,
-            ["-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height", "-of", "json", file], ct: ct).ConfigureAwait(false);
+            ["-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height:stream_tags=title,handler_name", "-of", "json", file], ct: ct).ConfigureAwait(false);
         return ParseProbe(r.StdOut);
     }
 
@@ -26,7 +30,7 @@ public sealed partial class Ffmpeg(string ffmpegPath, string ffprobePath)
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         int w = 0, h = 0;
-        var audio = false;
+        var audioTitles = new List<string>();
         foreach (var s in root.GetProperty("streams").EnumerateArray())
         {
             var type = s.GetProperty("codec_type").GetString();
@@ -37,12 +41,24 @@ public sealed partial class Ffmpeg(string ffmpegPath, string ffprobePath)
             }
             else if (type == "audio")
             {
-                audio = true;
+                // MKV keeps track titles in "title", MP4 in "handler_name" (default names like SoundHandler mean: no name).
+                string? title = null;
+                if (s.TryGetProperty("tags", out var tags))
+                {
+                    title = tags.TryGetProperty("title", out var t) ? t.GetString() : null;
+                    if (string.IsNullOrWhiteSpace(title) && tags.TryGetProperty("handler_name", out var hn)
+                        && hn.GetString() is { } handler && !handler.Contains("Handler", StringComparison.OrdinalIgnoreCase))
+                    {
+                        title = handler;
+                    }
+                }
+
+                audioTitles.Add(string.IsNullOrWhiteSpace(title) ? $"Audio {audioTitles.Count + 1}" : title!);
             }
         }
 
         var duration = double.Parse(root.GetProperty("format").GetProperty("duration").GetString()!, CultureInfo.InvariantCulture);
-        return new VideoInfo(w, h, duration, audio);
+        return new VideoInfo(w, h, duration, audioTitles.Count > 0) { AudioTracks = audioTitles };
     }
 
     /// <summary>Extracts 16 kHz mono 16-bit WAV (the format Whisper needs).</summary>

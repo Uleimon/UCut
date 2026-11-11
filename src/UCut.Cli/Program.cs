@@ -8,6 +8,7 @@ using UCut.Settings;
 using UCut.Transcription;
 using UCut.Twitch;
 using UCut.Cli;
+using UCut.App;
 
 // ucut – automatische Shorts aus OBS/Aitum-Clips.
 // Befehle:
@@ -29,20 +30,10 @@ if (droppedFiles)
 
 var command = arguments.Count > 0 ? arguments[0].ToLowerInvariant() : "help";
 
-string? logFile = null;
-
-void Log(string message)
-{
-    var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
-    Console.WriteLine(line);
-    if (logFile is not null)
-    {
-        // Also on disk, so a run overnight can be read in the morning (the window is gone after shutdown).
-        try { File.AppendAllText(logFile, $"[{DateTime.Now:dd.MM.yyyy HH:mm:ss}] {message}{Environment.NewLine}"); }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
-}
+// Shown live and, once the settings are loaded, also written to UCut-Protokoll.txt in the output folder.
+var runLog = new RunLog();
+runLog.Line += Console.WriteLine;
+void Log(string message) => runLog.Write(message);
 
 try
 {
@@ -105,127 +96,45 @@ int Init()
         return 0;
     }
 
-    var videos = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
-    var s = new UCutSettings
-    {
-        WatchFolder = Path.Combine(videos, "Aitum Vertical"),
-        OutputFolder = Path.Combine(videos, "UCut"),
-        Games = new GameSettings { TwitchChannel = "uleimon" },
-    };
-    SettingsStore.Save(s, settingsPath);
+    UCutEngine.LoadOrCreateSettings(settingsPath, out _);
     Console.WriteLine($"Vorlage angelegt: {settingsPath}");
     Console.WriteLine("Bitte darin watchFolder (Aitum-Ausgabeordner) und outputFolder prüfen, für Twitch-Clips unter \"games\" twitchClientId und twitchClientSecret eintragen.");
     return 0;
 }
 
-(UCutSettings Settings, Ffmpeg Ffmpeg, ClipPipeline Pipeline, GameDetector Games) Build(HttpClient http)
+UCutEngine Build()
 {
-    var s = SettingsStore.Load(settingsPath);
-    if (string.IsNullOrWhiteSpace(s.OutputFolder))
+    var engine = new UCutEngine(SettingsStore.Load(settingsPath), runLog);
+    runLog.Write($"--- UCut gestartet: {string.Join(' ', args)} ---");
+    if (engine.Settings.Writer.UseClaude && !engine.UsesClaude)
     {
-        throw new InvalidDataException("outputFolder ist in den Einstellungen nicht gesetzt.");
+        runLog.Write("Hinweis: ANTHROPIC_API_KEY ist nicht gesetzt, Titel und Hashtags kommen aus der Vorlage (ohne Lustigkeits-Bewertung).");
     }
 
-    Directory.CreateDirectory(s.OutputFolder);
-    logFile = Path.Combine(s.OutputFolder, "UCut-Protokoll.txt");
-    Log($"--- UCut gestartet: {string.Join(' ', args)} ---");
-
-    var ffmpeg = new Ffmpeg(s.FfmpegPath, s.FfprobePath);
-    IClipWriter writer = s.Writer.UseClaude && ClaudeClipWriter.IsAvailable
-        ? new ClaudeClipWriter(s.Writer.Model)
-        : new TemplateClipWriter();
-    if (s.Writer.UseClaude && writer is TemplateClipWriter)
-    {
-        Log("Hinweis: ANTHROPIC_API_KEY ist nicht gesetzt, Titel und Hashtags kommen aus der Vorlage (ohne Lustigkeits-Bewertung).");
-    }
-
-    var pipeline = new ClipPipeline(s, ffmpeg, new WhisperTranscriber(s.Whisper, Log), writer, Log);
-    var games = new GameDetector(s.Games, [new TwitchGameSource(s.Games, http), new ProcessGameSource(s.Games)], Log);
-    return (s, ffmpeg, pipeline, games);
+    return engine;
 }
 
 async Task<int> ProcessManyAsync(IReadOnlyList<string> inputs, string? gameOverride)
 {
-    using var http = new HttpClient();
-    var (s, _, pipeline, games) = Build(http);
-    var files = ClipImport.Collect(inputs, out var missing);
-    foreach (var m in missing)
-    {
-        Log($"Nicht gefunden oder kein Video: {m}");
-    }
-
-    if (files.Count == 0)
-    {
-        Log("Keine Videos zum Verarbeiten gefunden (.mp4, .mkv, .mov).");
-        return 1;
-    }
-
-    Log($"{files.Count} Clip(s) werden verarbeitet.");
-    var failed = 0;
-    foreach (var file in files)
-    {
-        try
-        {
-            var game = await ClipImport.ChooseGameAsync(file, gameOverride, s.Games, games, DateTime.Now);
-            await pipeline.ProcessAsync(file, game);
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or InvalidDataException)
-        {
-            failed++;
-            Log($"Fehler bei {Path.GetFileName(file)}: {ex.Message}");
-        }
-    }
-
-    Log(failed == 0 ? "Alle Clips fertig." : $"{files.Count - failed} fertig, {failed} mit Fehler.");
-    return failed == 0 ? 0 : 1;
+    using var engine = Build();
+    var r = await engine.ProcessFilesAsync(inputs, gameOverride);
+    return r.Failed == 0 && r.Done > 0 ? 0 : 1;
 }
 
 async Task<int> WatchAsync()
 {
-    using var http = new HttpClient();
-    var (s, _, pipeline, games) = Build(http);
-    if (!Directory.Exists(s.WatchFolder))
-    {
-        throw new InvalidDataException($"watchFolder existiert nicht: {s.WatchFolder}");
-    }
-
+    using var engine = Build();
     using var cts = new CancellationTokenSource();
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
-
-    // The game is detected the moment the clip appears, not after rendering.
-    var detected = new System.Collections.Concurrent.ConcurrentDictionary<string, Task<GameResult>>(StringComparer.OrdinalIgnoreCase);
-    using var watcher = new ClipWatcher(s.WatchFolder, Log);
-    watcher.FileAppeared += path => detected.TryAdd(path, games.DetectAsync(cts.Token));
-    watcher.Start();
-    Log("Bereit. Neue Clips werden automatisch verarbeitet (Strg+C beendet).");
-    try
-    {
-        await foreach (var file in watcher.ReadFinishedAsync(cts.Token))
-        {
-            try
-            {
-                var game = detected.TryRemove(file, out var t) ? await t : await games.DetectAsync(cts.Token);
-                await pipeline.ProcessAsync(file, game, ct: cts.Token);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                Log($"Fehler bei {Path.GetFileName(file)}: {ex.Message}");
-            }
-        }
-    }
-    catch (OperationCanceledException)
-    {
-        Log("Beendet.");
-    }
-
+    Log("Strg+C beendet die Überwachung.");
+    await engine.WatchAsync(cts.Token);
     return 0;
 }
 
 async Task<int> ShowGameAsync()
 {
-    using var http = new HttpClient();
-    var (_, _, _, games) = Build(http);
-    var g = await games.DetectAsync();
+    using var engine = Build();
+    var g = await engine.Games.DetectAsync();
     Console.WriteLine($"Spiel: {g.FolderName} (Quelle: {g.Source}{(g.RawName is not null && g.RawName != g.FolderName ? $", Twitch/Prozess: {g.RawName}" : "")})");
     return 0;
 }
@@ -263,41 +172,24 @@ async Task<int> PreviewAsync(string video, string outPng)
 
 async Task<int> TwitchAsync(string? since, string? until, string? max, bool all, bool listOnly)
 {
-    using var http = new HttpClient();
-    var (s, _, pipeline, _) = Build(http);
-    var opts = s.TwitchClips;
-    if (all)
-    {
-        opts.OnlyFunny = false;
-    }
-
-    if (max is not null)
-    {
-        opts.MaxClips = int.Parse(max, CultureInfo.InvariantCulture);
-    }
-
-    var api = new TwitchApi(s.Games, http);
-    if (!api.IsConfigured)
+    using var engine = Build();
+    var opts = engine.Settings.TwitchClips;
+    if (!engine.Twitch.IsConfigured)
     {
         Console.Error.WriteLine("Für Twitch-Clips braucht UCut deinen Kanal und eine Twitch-App:");
-        Console.Error.WriteLine("  1. https://dev.twitch.tv/console/apps -> Anwendung registrieren (Redirect-URL: http://localhost, Kategorie: Application Integration)");
+        Console.Error.WriteLine("  1. https://dev.twitch.tv/console/apps -> Anwendung registrieren (Redirect-URL: https://localhost, Kategorie: Application Integration)");
         Console.Error.WriteLine("  2. In den Einstellungen unter \"games\": twitchChannel, twitchClientId und twitchClientSecret eintragen");
         return 1;
     }
 
     var from = ParseDate(since ?? opts.Since, "--seit");
     var to = string.IsNullOrWhiteSpace(until ?? opts.Until) ? DateTimeOffset.Now : ParseDate(until ?? opts.Until, "--bis").AddDays(1);
-    Log($"Suche Twitch-Clips von {api.Channel} seit {from:dd.MM.yyyy} ...");
-    var clips = await new TwitchClipSearch(api, Log).ListAsync(from, to);
-
-    var archive = ClipArchive.Load(s.OutputFolder);
-    var candidates = FunnyFilter.Rank(clips.Where(c => !archive.Contains(c.Id)).ToList(), opts);
-    var skipped = clips.Count(c => archive.Contains(c.Id));
-    Log($"{candidates.Count} Clip(s) {(opts.OnlyFunny ? "sehen lustig aus" : "werden geladen")}" + (skipped > 0 ? $", {skipped} schon früher geladen." : "."));
+    var maxClips = max is null ? opts.MaxClips : int.Parse(max, CultureInfo.InvariantCulture);
+    var search = await engine.SearchTwitchAsync(from, to, opts.OnlyFunny && !all, maxClips);
 
     if (listOnly)
     {
-        foreach (var c in candidates)
+        foreach (var c in search.Candidates)
         {
             Console.WriteLine($"  {c.Clip.CreatedAt.ToLocalTime():dd.MM.yyyy}  {c.Clip.ViewCount,6} Aufrufe  {c.Clip.GameName ?? "?",-20}  {c.Clip.Title}  ({string.Join("; ", c.Reasons)})");
         }
@@ -305,45 +197,8 @@ async Task<int> TwitchAsync(string? since, string? until, string? max, bool all,
         return 0;
     }
 
-    var downloader = new ClipDownloader(opts.YtDlpPath);
-    var downloadFolder = string.IsNullOrWhiteSpace(opts.DownloadFolder) ? Path.Combine(s.OutputFolder, "_Twitch-Originale") : opts.DownloadFolder;
-    var failed = 0;
-    var n = 0;
-    foreach (var c in candidates)
-    {
-        n++;
-        var clip = c.Clip;
-        try
-        {
-            Log($"[{n}/{candidates.Count}] \"{clip.Title}\" vom {clip.CreatedAt.ToLocalTime():dd.MM.yyyy} ({clip.ViewCount} Aufrufe) wird geladen ...");
-            var file = await downloader.DownloadAsync(clip, downloadFolder);
-            var game = clip.GameName is { Length: > 0 } raw
-                ? new GameResult(GameDetector.ToFolderName(raw, s.Games), raw, "Twitch-Clip")
-                : new GameResult(s.Games.UnknownFolder, null, "Twitch-Clip");
-            var origin = new ClipOrigin(clip.CreatedAt, "Twitch", clip.Id, clip.Url, clip.Title, clip.ViewCount);
-            var result = await pipeline.ProcessAsync(file, game, origin);
-            archive.Add(new ArchivedClip
-            {
-                Id = clip.Id, Url = clip.Url, Title = clip.Title, Views = clip.ViewCount, CreatedAt = clip.CreatedAt,
-                Game = game.FolderName, Video = result.VideoPath, Score = result.Metadata.Score.Total,
-                Funniness = result.Metadata.Funniness?.Score, ProcessedAt = DateTimeOffset.Now,
-            });
-            archive.WriteOverview(); // after every clip, so the list is current even if the run stops
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or InvalidDataException)
-        {
-            failed++;
-            Log($"Fehler bei {clip.Url}: {ex.Message}");
-        }
-    }
-
-    if (archive.Clips.Count > 0)
-    {
-        Log($"Übersicht (lustigste zuerst): {archive.WriteOverview()}");
-    }
-
-    Log(failed == 0 ? "Alle Twitch-Clips fertig." : $"{candidates.Count - failed} fertig, {failed} mit Fehler.");
-    return failed == 0 ? 0 : 1;
+    var r = await engine.ProcessTwitchAsync(search.Candidates.Select(c => c.Clip).ToList());
+    return r.Failed == 0 ? 0 : 1;
 }
 
 static DateTimeOffset ParseDate(string value, string name) =>

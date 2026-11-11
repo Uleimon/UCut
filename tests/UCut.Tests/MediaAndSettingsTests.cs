@@ -9,9 +9,10 @@ public class MediaAndSettingsTests
     public void Probe_Ausgabe_wird_gelesen()
     {
         var info = Ffmpeg.ParseProbe("""
-            {"streams":[{"codec_type":"video","width":910,"height":1620},{"codec_type":"audio"}],"format":{"duration":"12.005011"}}
+            {"streams":[{"codec_type":"video","width":910,"height":1620},{"codec_type":"audio"},{"codec_type":"audio","tags":{"handler_name":"SoundHandler"}},{"codec_type":"audio","tags":{"title":"Mikro"}}],"format":{"duration":"12.005011"}}
             """);
-        Assert.Equal(new VideoInfo(910, 1620, 12.005011, true), info);
+        Assert.Equal((910, 1620, 12.005011, true), (info.Width, info.Height, info.DurationSeconds, info.HasAudio));
+        Assert.Equal(["Audio 1", "Audio 2", "Mikro"], info.AudioTracks);
     }
 
     [Fact]

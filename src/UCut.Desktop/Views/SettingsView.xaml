@@ -1,0 +1,116 @@
+<UserControl x:Class="UCut.Desktop.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:UCut.Desktop">
+    <UserControl.Resources>
+        <local:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True"/>
+        <Style x:Key="Field" TargetType="TextBlock" BasedOn="{StaticResource Subtle}">
+            <Setter Property="Margin" Value="0,8,0,3"/>
+        </Style>
+    </UserControl.Resources>
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource SidebarBrush}" Padding="24,10">
+            <StackPanel Orientation="Horizontal">
+                <Button Style="{StaticResource Primary}" Content="Speichern" Command="{Binding SaveCommand}"/>
+                <Button Content="Verwerfen" Command="{Binding ReloadCommand}"/>
+                <Button Content="settings.json öffnen (alle Optionen)" Command="{Binding OpenFileCommand}"/>
+                <TextBlock Style="{StaticResource Subtle}" VerticalAlignment="Center" Text="{Binding SettingsPath}" Margin="8,0,0,0"/>
+            </StackPanel>
+        </Border>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24,20" MaxWidth="900" HorizontalAlignment="Left">
+                <TextBlock Style="{StaticResource H1}" Text="Einstellungen" Margin="0,0,0,16"/>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource H2}" Text="Programme"/>
+                        <TextBlock Text="{Binding ToolStatus}" TextWrapping="Wrap" TextTrimming="None"/>
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Content="ffmpeg installieren" Command="{Binding InstallCommand}" CommandParameter="ffmpeg" Visibility="{Binding FfmpegOk, Converter={StaticResource InvBoolToVis}}"/>
+                            <Button Content="yt-dlp installieren" Command="{Binding InstallCommand}" CommandParameter="ytdlp" Visibility="{Binding YtDlpOk, Converter={StaticResource InvBoolToVis}}"/>
+                        </WrapPanel>
+                        <TextBlock Style="{StaticResource Field}" Text="ffmpeg (leer lassen bzw. „ffmpeg“ = automatisch)"/>
+                        <TextBox Text="{Binding FfmpegPath}"/>
+                        <TextBlock Style="{StaticResource Field}" Text="yt-dlp"/>
+                        <TextBox Text="{Binding YtDlpPath}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource H2}" Text="Ordner"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Aitum-Ordner (wo Aitum Vertical deine Clips speichert; OBS → Aitum Vertical → Zahnrad)"/>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Wählen …" Command="{Binding BrowseCommand}" CommandParameter="watch" Margin="8,0,0,0"/>
+                            <TextBox Text="{Binding WatchFolder}"/>
+                        </DockPanel>
+                        <TextBlock Style="{StaticResource Field}" Text="Ausgabeordner (fertige Clips, ein Unterordner pro Spiel)"/>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Wählen …" Command="{Binding BrowseCommand}" CommandParameter="output" Margin="8,0,0,0"/>
+                            <TextBox Text="{Binding OutputFolder}"/>
+                        </DockPanel>
+                        <TextBlock Style="{StaticResource Hint}" Text="Beim Wechsel des Ausgabeordners den alten Ordner mitsamt twitch-clips.json verschieben, sonst lädt UCut fertige Twitch-Clips noch einmal."/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource H2}" Text="Twitch"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Kanal"/>
+                        <TextBox Text="{Binding TwitchChannel}"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Client-ID"/>
+                        <TextBox Text="{Binding TwitchClientId}"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Secret (wie ein Passwort, nicht weitergeben)"/>
+                        <TextBox Text="{Binding TwitchClientSecret}" FontFamily="Consolas"/>
+                        <Button Content="Twitch-Entwicklerkonsole öffnen" Command="{Binding TwitchConsoleCommand}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource H2}" Text="Claude: Lustigkeit, Titel und Hashtags"/>
+                        <CheckBox Content="Claude benutzen" IsChecked="{Binding UseClaude}"/>
+                        <TextBlock Style="{StaticResource Field}" Text="API-Schlüssel (console.anthropic.com, rund 2 Cent pro Clip). Wird für deinen Windows-Benutzer gespeichert."/>
+                        <TextBox Text="{Binding ClaudeKey}" FontFamily="Consolas"/>
+                        <Button Content="Anthropic-Konsole öffnen" Command="{Binding AnthropicConsoleCommand}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Kanalname in Beschreibungen"/>
+                        <TextBox Text="{Binding ChannelName}"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Hashtags für jeden Clip"/>
+                        <TextBox Text="{Binding CommonHashtags}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource H2}" Text="Clips fertig machen"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Querformat ins Hochformat"/>
+                        <ComboBox ItemsSource="{Binding ReframeModes}" SelectedItem="{Binding ReframeMode}" HorizontalAlignment="Left" MinWidth="360"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Spracherkennung"/>
+                        <ComboBox ItemsSource="{Binding WhisperModels}" SelectedItem="{Binding WhisperModel}" HorizontalAlignment="Left" MinWidth="360"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Sprache (de, en oder auto)"/>
+                        <TextBox Text="{Binding Language}" Width="120" HorizontalAlignment="Left"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Stille am Anfang wegschneiden ab (Sekunden)"/>
+                        <TextBox Text="{Binding MaxDeadStart}" Width="120" HorizontalAlignment="Left"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Maximale Länge (Sekunden)"/>
+                        <TextBox Text="{Binding MaxLength}" Width="120" HorizontalAlignment="Left"/>
+                        <CheckBox Content="Uleimon-Logo unter die Cam" IsChecked="{Binding LogoEnabled}" Margin="0,12,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource H2}" Text="Untertitel"/>
+                        <CheckBox Content="Untertitel einbrennen" IsChecked="{Binding CaptionsEnabled}"/>
+                        <CheckBox Content="GROSSBUCHSTABEN" IsChecked="{Binding Uppercase}"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Schriftgröße"/>
+                        <TextBox Text="{Binding CaptionSize}" Width="120" HorizontalAlignment="Left"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Wörter gleichzeitig"/>
+                        <TextBox Text="{Binding WordsPerLine}" Width="120" HorizontalAlignment="Left"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Farbe des gesprochenen Worts (#RRGGBB)"/>
+                        <TextBox Text="{Binding HighlightColor}" Width="120" HorizontalAlignment="Left"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

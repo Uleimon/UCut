@@ -1,0 +1,116 @@
+using System.IO;
+using System.Windows;
+using UCut.Desktop.ViewModels;
+using UCut.Settings;
+
+namespace UCut.Desktop;
+
+public partial class App : Application
+{
+    private MainViewModel? _main;
+    private bool _showingError;
+    private bool _selfTest;
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+        _selfTest = e.Args.Contains("--ui-selftest");
+        DispatcherUnhandledException += (_, args) =>
+        {
+            if (_selfTest)
+            {
+                Console.Error.WriteLine(args.Exception);
+                args.Handled = true;
+                Shutdown(3);
+                return;
+            }
+
+            if (_showingError)
+            {
+                args.Handled = false;
+                return;
+            }
+
+            _showingError = true;
+            MessageBox.Show(args.Exception.ToString(), "UCut – unerwarteter Fehler", MessageBoxButton.OK, MessageBoxImage.Error);
+            _showingError = false;
+            args.Handled = true;
+        };
+
+        // Self-test runs against its own settings in a temp folder, so CI never touches real data.
+        var settingsPath = SettingsStore.DefaultPath;
+        if (_selfTest)
+        {
+            var dir = Directory.CreateTempSubdirectory("ucut-selftest-").FullName;
+            settingsPath = Path.Combine(dir, "settings.json");
+            var s = UCut.App.UCutEngine.DefaultSettings();
+            s.OutputFolder = Path.Combine(dir, "out");
+            s.WatchFolder = Path.Combine(dir, "watch");
+            SettingsStore.Save(s, settingsPath);
+        }
+
+        _main = new MainViewModel(settingsPath, new WpfDialogs(), Dispatcher);
+        var window = new MainWindow { DataContext = _main };
+        window.Show();
+        _main.Library.Refresh();
+        _ = _main.CheckToolsAsync();
+
+        // Videos dropped onto UCut.exe (or "Öffnen mit") land in the queue.
+        var files = e.Args.Where(a => !a.StartsWith("--", StringComparison.Ordinal) && (File.Exists(a) || Directory.Exists(a))).ToList();
+        if (files.Count > 0)
+        {
+            _main.AddFiles(files);
+        }
+
+        if (_selfTest)
+        {
+            _ = RunSelfTestAsync(window, _main);
+        }
+    }
+
+    /// <summary>For CI: shows every page once (forcing layout and bindings) and exits with 0; any exception gives code 3.</summary>
+    private async Task RunSelfTestAsync(Window window, MainViewModel main)
+    {
+        try
+        {
+            foreach (var page in new[] { "library", "cutroom", "import", "twitch", "settings", "log", "library" })
+            {
+                main.Page = page;
+                window.UpdateLayout();
+                await Task.Delay(700);
+                Console.Out.WriteLine($"page ok: {page}");
+            }
+
+            var video = Environment.GetEnvironmentVariable("UCUT_SELFTEST_VIDEO");
+            if (!string.IsNullOrEmpty(video) && File.Exists(video))
+            {
+                await main.CutRoom.OpenAsync(video);
+                window.UpdateLayout();
+                main.CutRoom.SplitCommand.Execute(null);
+                main.CutRoom.ClickTimeline(10, true);
+                main.CutRoom.UndoCommand.Execute(null);
+                window.UpdateLayout();
+                await Task.Delay(1500);
+                Console.Out.WriteLine($"cutroom ok: {main.CutRoom.Segments.Count} segment(s), {main.CutRoom.Tracks.Count} track(s)");
+
+                main.AddFiles([video]);
+                window.UpdateLayout();
+                await Task.Delay(500);
+                Console.Out.WriteLine($"import ok: {main.Import.Items.Count} item(s)");
+            }
+
+            Shutdown(0);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            Shutdown(3);
+        }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _main?.Dispose();
+        base.OnExit(e);
+    }
+}

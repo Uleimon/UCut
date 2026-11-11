@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/UCut.Cli/UCut.Cli.csproj" />
     <Project Path="src/UCut.Core/UCut.Core.csproj" />
+    <Project Path="src/UCut.Desktop/UCut.Desktop.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/UCut.Tests/UCut.Tests.csproj" />

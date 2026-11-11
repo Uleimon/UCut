@@ -1,0 +1,104 @@
+<UserControl x:Class="UCut.Desktop.Views.TwitchView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:UCut.Desktop">
+    <UserControl.Resources>
+        <local:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <local:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True"/>
+    </UserControl.Resources>
+    <DockPanel Margin="24,20">
+        <StackPanel DockPanel.Dock="Top">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource H1}" Text="Twitch-Clips"/>
+                <TextBlock Style="{StaticResource Subtle}" FontSize="14" Margin="12,8,0,0" Text="{Binding Channel, StringFormat='twitch.tv/{0}'}"/>
+            </StackPanel>
+            <TextBlock Style="{StaticResource Hint}" FontSize="13" Margin="0,4,0,14"
+                       Text="Holt alle Clips deines Kanals, sortiert die lustig aussehenden nach vorne, lädt die ausgewählten und macht sie fertig. Schon geladene Clips werden übersprungen."/>
+
+            <!-- Setup -->
+            <Border Style="{StaticResource Card}" Visibility="{Binding IsConfigured, Converter={StaticResource InvBoolToVis}}" BorderBrush="{StaticResource WarnBrush}" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource H2}" Text="Einmal einrichten"/>
+                    <TextBlock Style="{StaticResource Hint}" FontSize="13">
+                        1. Bei Twitch eine Anwendung registrieren (Redirect-URL https://localhost, Kategorie „Application Integration“, Typ „Vertraulich“).<LineBreak/>
+                        2. Client-ID und Secret in den Einstellungen eintragen.
+                    </TextBlock>
+                    <WrapPanel>
+                        <Button Content="Twitch-Entwicklerkonsole öffnen" Command="{Binding OpenDevConsoleCommand}"/>
+                        <Button Style="{StaticResource Primary}" Content="Zu den Einstellungen" Command="{Binding OpenSettingsCommand}"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <WrapPanel Visibility="{Binding IsConfigured, Converter={StaticResource BoolToVis}}" Margin="0,0,0,12">
+                <TextBlock Text="Von" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                <DatePicker SelectedDate="{Binding From}" Width="130" Margin="0,0,16,8"/>
+                <TextBlock Text="bis" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                <DatePicker SelectedDate="{Binding To}" Width="130" Margin="0,0,16,8"/>
+                <CheckBox Content="Nur lustig aussehende" IsChecked="{Binding OnlyFunny}" Margin="0,0,16,8"/>
+                <Button Style="{StaticResource Primary}" Command="{Binding SearchCommand}" Margin="0,0,8,8">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="Clips suchen" Foreground="White"/></StackPanel>
+                </Button>
+            </WrapPanel>
+            <TextBlock Text="{Binding Summary}" Margin="0,0,0,10"/>
+        </StackPanel>
+
+        <!-- Load bar -->
+        <Border DockPanel.Dock="Bottom" Style="{StaticResource Card}" Margin="0,12,0,0" Visibility="{Binding IsConfigured, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource Primary}" Command="{Binding LoadCommand}" Margin="0">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE896;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="Ausgewählte laden und fertig machen" Foreground="White"/></StackPanel>
+                </Button>
+                <CheckBox DockPanel.Dock="Right" Content="Danach PC ausschalten" IsChecked="{Binding ShutdownAfter}" Margin="0,0,16,0"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Alle" Command="{Binding SelectAllCommand}" CommandParameter="true"/>
+                    <Button Content="Keine" Command="{Binding SelectAllCommand}" CommandParameter="false"/>
+                    <TextBlock Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="8,0,0,0" Text="Der PC bleibt wach, solange UCut arbeitet."/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <ListBox ItemsSource="{Binding Items}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem"><ContentPresenter/></ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border Width="300" Margin="0,0,14,14" CornerRadius="12" Background="{StaticResource SurfaceBrush}">
+                        <StackPanel>
+                            <Grid Height="169">
+                                <Border CornerRadius="12,12,0,0" Background="#08090C" ClipToBounds="True">
+                                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
+                                </Border>
+                                <CheckBox IsChecked="{Binding Selected}" Margin="10" HorizontalAlignment="Left" VerticalAlignment="Top">
+                                    <CheckBox.LayoutTransform><ScaleTransform ScaleX="1.4" ScaleY="1.4"/></CheckBox.LayoutTransform>
+                                </CheckBox>
+                                <Border Style="{StaticResource Chip}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8">
+                                    <TextBlock Text="{Binding Duration}" FontSize="11"/>
+                                </Border>
+                            </Grid>
+                            <StackPanel Margin="12,10">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" ToolTip="{Binding Title}"/>
+                                <TextBlock Style="{StaticResource Subtle}" Margin="0,2,0,0">
+                                    <Run Text="{Binding Game, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding DateText, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Views, Mode=OneWay}"/>
+                                </TextBlock>
+                                <TextBlock Style="{StaticResource Subtle}" Foreground="{StaticResource FunBrush}" Text="{Binding Reasons}" Margin="0,4,0,0"/>
+                                <Button Content="Auf Twitch ansehen" HorizontalAlignment="Left" Margin="0,8,0,0" Padding="10,4"
+                                        Command="{Binding DataContext.OpenClipCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>
