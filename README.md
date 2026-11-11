@@ -13,12 +13,24 @@ Sobald Aitum Vertical einen Clip speichert, passiert Folgendes:
 7. **Texte:** Titel, Hashtags und Beschreibung pro Plattform.
 8. **Ablage:** `UCut\<Spiel>\2026-11-10_150700_titel.mp4` plus eine Infodatei `...json` mit allen Texten daneben.
 
+## Das Programm
+
+`UCut-Setup-0.2.0.exe` installiert UCut wie ein normales Programm (ohne Admin-Rechte, nach `%LOCALAPPDATA%\Programs\UCut`), mit eigenem Icon im Startmenü und auf dem Desktop. Deinstallieren geht über *Einstellungen → Apps*.
+
+- **Clips:** Galerie aller fertigen Clips mit Vorschaubild, Filter nach Spiel, Sortierung (neueste, lustigste, Score) und Suche. Rechts läuft der Clip, darunter stehen Titel und Hashtags pro Plattform zum Bearbeiten und Kopieren.
+- **Schnittraum:** Zeitleiste mit Bildstreifen und einer Wellenform pro Tonspur. Teilen (`S`), Löschen (`Entf`), Anfang/Ende bis zur Abspielposition kürzen (`Q`/`W`), Stücke verschieben, Lautstärke und Stumm pro Spur, eine Musikspur mit Ausblenden, Ein-/Ausblenden des Bildes, Rückgängig (`Strg+Z`). Export als MP4 (H.264) in Original, 1080x1920, 720x1280 oder 1920x1080, oder nur der Ton als MP3.
+- **Hinzufügen:** Videos hineinziehen, sie laufen durch die Warteschlange.
+- **Twitch:** alte Clips durchsuchen, mit Vorschaubild auswählen und laden, auf Wunsch PC danach aus.
+- **Auto:** Aitum-Ordner überwachen an/aus. **Protokoll** und **Einstellungen** unten links.
+
+Die Kommandozeile gibt es weiterhin als `ucut-cli.exe` im selben Ordner. Beide nutzen dieselben Einstellungen (`%APPDATA%\UCut\settings.json`) und denselben Clip-Ordner.
+
 ## Eigene Clips laden
 
 Du kannst UCut auch Clips von Hand geben, z. B. alte Twitch-Clips oder Aufnahmen in 16:9:
 
-- **Drag & Drop:** Videos oder einen ganzen Ordner im Explorer auf `ucut.exe` ziehen. Das Fenster bleibt am Ende offen, bis du eine Taste drückst.
-- **Kommandozeile:** `ucut process clip1.mp4 clip2.mp4 D:\Clips --game "GTA V"`
+- **Drag & Drop:** Videos oder einen ganzen Ordner im Explorer auf `ucut-cli.exe` ziehen (oder ins Programm). Das Fenster bleibt am Ende offen, bis du eine Taste drückst.
+- **Kommandozeile:** `ucut-cli process clip1.mp4 clip2.mp4 D:\Clips --game "GTA V"`
 
 UCut prüft dabei jeden Clip:
 
@@ -29,7 +41,7 @@ UCut prüft dabei jeden Clip:
 
 ## Alte Twitch-Clips laden
 
-`ucut twitch` holt deine Twitch-Clips seit 2020, sucht die lustigen heraus und macht sie fertig wie jeden anderen Clip (Cam oben, Untertitel, Logo, Texte, Ablage im Spielordner):
+`ucut-cli twitch` holt deine Twitch-Clips seit 2020, sucht die lustigen heraus und macht sie fertig wie jeden anderen Clip (Cam oben, Untertitel, Logo, Texte, Ablage im Spielordner):
 
 1. **Suchen:** UCut fragt Twitch Monat für Monat nach allen Clips deines Kanals. Der Kanal behält seine ID, auch Clips aus der KREATIVLOS-Zeit sind dabei. Das Spiel kommt direkt aus dem Clip.
 2. **Vorsortieren:** Als lustig gilt ein Clip, wenn im Titel Wörter wie „XD“, „Ausraster“, „lol“ oder 😂 stehen (Liste in `twitchClips.funnyWords`) oder wenn er zum meistgesehenen Viertel gehört (`twitchClips.topViewsShare`). Die besten Kandidaten kommen zuerst.
@@ -41,11 +53,11 @@ Die Dateien heißen nach dem Aufnahmetag (`2020-07-03_211500_titel.mp4`), in der
 
 | Aufruf | Was passiert |
 |---|---|
-| `ucut twitch --liste` | nur anzeigen, welche Clips geladen würden, und warum |
-| `ucut twitch` | alle lustig aussehenden Clips seit 2020 laden und verarbeiten |
-| `ucut twitch --max 20` | nur die 20 besten Kandidaten |
-| `ucut twitch --seit 2021-01-01 --bis 2021-12-31` | nur ein Zeitraum |
-| `ucut twitch --alle` | jeden Clip laden, ohne Vorsortierung |
+| `ucut-cli twitch --liste` | nur anzeigen, welche Clips geladen würden, und warum |
+| `ucut-cli twitch` | alle lustig aussehenden Clips seit 2020 laden und verarbeiten |
+| `ucut-cli twitch --max 20` | nur die 20 besten Kandidaten |
+| `ucut-cli twitch --seit 2021-01-01 --bis 2021-12-31` | nur ein Zeitraum |
+| `ucut-cli twitch --alle` | jeden Clip laden, ohne Vorsortierung |
 
 Dafür braucht UCut die Twitch-App aus den Einstellungen (`games.twitchChannel`, `games.twitchClientId`, `games.twitchClientSecret`, siehe unten).
 
@@ -69,10 +81,10 @@ Hochladen kommt im nächsten Schritt. Die Infodatei ist schon so aufgebaut, dass
 
 1. **.NET 10** installieren (falls noch nicht da, wie bei UScan).
 2. **ffmpeg** installieren: `winget install Gyan.FFmpeg`, danach ein neues Terminal öffnen. Test: `ffmpeg -version`. Für alte Twitch-Clips zusätzlich `winget install yt-dlp.yt-dlp`.
-3. UCut bauen: `dotnet build -c Release` im Repo-Ordner. Das Programm liegt dann unter `src\UCut.Cli\bin\Release\net10.0\ucut.exe`.
-4. Einstellungen anlegen: `ucut init`. Das legt `%APPDATA%\UCut\settings.json` an.
+3. UCut bauen: `dotnet build -c Release` im Repo-Ordner. Das Programm liegt dann unter `src\UCut.Cli\bin\Release\net10.0\ucut-cli.exe`.
+4. Einstellungen anlegen: `ucut-cli init`. Das legt `%APPDATA%\UCut\settings.json` an.
 5. In der Datei mindestens `watchFolder` (Ausgabeordner von Aitum Vertical) und `outputFolder` prüfen.
-6. Starten: `ucut watch`. Ab jetzt wird jeder neue Clip automatisch verarbeitet.
+6. Starten: `ucut-cli watch`. Ab jetzt wird jeder neue Clip automatisch verarbeitet.
 
 Beim ersten Clip lädt UCut das Whisper-Modell herunter (Modell `medium`, ca. 1,5 GB, einmalig).
 
@@ -80,13 +92,13 @@ Beim ersten Clip lädt UCut das Whisper-Modell herunter (Modell `medium`, ca. 1,
 
 | Befehl | Was er macht |
 |---|---|
-| `ucut init` | Einstellungsdatei anlegen |
-| `ucut watch` | Aitum-Ordner überwachen und jeden neuen Clip verarbeiten |
-| `ucut process <video/ordner> ...` | eigene Clips verarbeiten, auch mehrere oder ganze Ordner; `--game "GTA V"` setzt das Spiel |
-| Videos auf `ucut.exe` ziehen | dasselbe per Drag & Drop |
-| `ucut preview <video>` | Standbild mit Logo und Beispiel-Untertiteln, um die Position einzustellen (`--out bild.png`) |
-| `ucut game` | zeigt, welches Spiel gerade erkannt wird |
-| `ucut twitch` | alte Twitch-Clips nach lustigen durchsuchen, laden und fertig machen (`--liste`, `--max`, `--seit`, `--bis`, `--alle`) |
+| `ucut-cli init` | Einstellungsdatei anlegen |
+| `ucut-cli watch` | Aitum-Ordner überwachen und jeden neuen Clip verarbeiten |
+| `ucut-cli process <video/ordner> ...` | eigene Clips verarbeiten, auch mehrere oder ganze Ordner; `--game "GTA V"` setzt das Spiel |
+| Videos auf `ucut-cli.exe` ziehen (oder ins Programm) | dasselbe per Drag & Drop |
+| `ucut-cli preview <video>` | Standbild mit Logo und Beispiel-Untertiteln, um die Position einzustellen (`--out bild.png`) |
+| `ucut-cli game` | zeigt, welches Spiel gerade erkannt wird |
+| `ucut-cli twitch` | alte Twitch-Clips nach lustigen durchsuchen, laden und fertig machen (`--liste`, `--max`, `--seit`, `--bis`, `--alle`) |
 
 Alle Befehle nehmen `--settings <datei>` für eine andere Einstellungsdatei.
 
@@ -100,7 +112,7 @@ Die wichtigsten Felder in `settings.json`:
 - `cut.maxDeadStartSeconds`: ab wie viel Stille am Anfang geschnitten wird (Standard 0,8 s).
 - `reframe`: was mit Clips passiert, die nicht hochkant sind (siehe oben).
 - `logo.expectedCamEdge`: wo bei deinem Layout die Cam endet (Standard 0,331 = 33 % der Höhe), `logo.camEdgeTolerance`: wie viel Abweichung noch als „passt“ gilt.
-- `logo`: Position und Größe als Anteil der Bildgröße. Die Standardwerte passen zum Layout aus deinem Beispielclip (Namensleiste unter der Cam). `cover` ist die Fläche, die vorher übermalt wird, damit der alte Name nicht durchscheint. Mit `"centerY": null` sucht UCut die Unterkante der Cam selbst. Mit `ucut preview` siehst du das Ergebnis sofort.
+- `logo`: Position und Größe als Anteil der Bildgröße. Die Standardwerte passen zum Layout aus deinem Beispielclip (Namensleiste unter der Cam). `cover` ist die Fläche, die vorher übermalt wird, damit der alte Name nicht durchscheint. Mit `"centerY": null` sucht UCut die Unterkante der Cam selbst. Mit `ucut-cli preview` siehst du das Ergebnis sofort.
 - `games.twitchChannel`, `games.twitchClientId`, `games.twitchClientSecret`: für die Twitch-Kategorie. Eine App legst du unter <https://dev.twitch.tv/console/apps> an (Redirect-URL `http://localhost`, Kategorie „Application Integration“). Das Secret kann auch in der Umgebungsvariable `UCUT_TWITCH_SECRET` stehen.
 - `games.processes`: welches Programm zu welchem Spiel gehört (GTA, FiveM, Minecraft, Valorant ... sind schon drin).
 - `games.aliases`: macht aus „Grand Theft Auto V“ den Ordner „GTA V“.
@@ -132,6 +144,7 @@ Du kannst die Texte vor dem Hochladen von Hand ändern.
 ```bash
 dotnet build
 dotnet test
+installer/build.sh   # baut publish/UCut-Setup-<Version>.exe (braucht nsis)
 ```
 
 Die Tests brauchen ffmpeg im PATH (ein Test rendert ein echtes Video). Die CI läuft unter Linux und Windows.
@@ -140,5 +153,6 @@ Die Tests brauchen ffmpeg im PATH (ein Test rendert ein echtes Video). Die CI l�
 
 - Upload auf YouTube Shorts, TikTok und Instagram (erst privat, später automatisch).
 - Lach-Erkennung im Ton für die Lustigkeits-Bewertung.
-- Oberfläche mit Vorschau, in der man das Logo mit der Maus verschiebt.
+- Logo im Programm mit der Maus verschieben.
+- Vorschaubild-Generator für YouTube.
 - Trend-Hashtags und Trend-Sounds.
