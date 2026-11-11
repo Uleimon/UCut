@@ -90,10 +90,7 @@ public static class ClipLibrary
     {
         foreach (var p in new[] { clip.VideoPath, clip.MetadataPath, clip.ThumbnailPath, clip.YouTubeThumbnailPath })
         {
-            if (File.Exists(p))
-            {
-                File.Delete(p);
-            }
+            Media.FileRetry.Delete(p);
         }
     }
 }

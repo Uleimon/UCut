@@ -165,14 +165,10 @@ public sealed class ClipPipeline(
             var job = new RenderJob(Path.GetFullPath(sourceFile), tmpOut, cut, outWidth, outHeight, assName, logoPath, settings.Logo, layout.LogoCenterY, reframe, layout.UseCover);
             log("  Video wird gerendert ...");
             await ProcessRunner.RunCheckedAsync(ffmpeg.FfmpegPath, RenderCommand.Build(job), work.FullName, ct).ConfigureAwait(false);
-            File.Move(tmpOut, output, overwrite: true);
+            FileRetry.Move(tmpOut, output);
             foreach (var stale in new[] { ".thumb.jpg", ".youtube.jpg" })
             {
-                var old = Path.ChangeExtension(output, stale);
-                if (File.Exists(old))
-                {
-                    File.Delete(old);
-                }
+                FileRetry.Delete(Path.ChangeExtension(output, stale));
             }
 
             var loudness = await ffmpeg.MeasureLoudnessAsync(output, ct).ConfigureAwait(false);

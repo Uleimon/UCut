@@ -50,15 +50,19 @@ public partial class LibraryView : UserControl
     {
         if (e.PropertyName == nameof(LibraryViewModel.Selected))
         {
+            if (_vm?.Selected is null)
+            {
+                // Let go of the file right now, so it can be deleted or rendered again.
+                Player.Stop();
+                Player.Close();
+                SetPlaying(false);
+                return;
+            }
+
             // New clip: start playing (like the preview in clip apps).
             Dispatcher.BeginInvoke(() =>
             {
-                if (_vm?.Selected is null)
-                {
-                    Player.Stop();
-                    SetPlaying(false);
-                }
-                else
+                if (_vm?.Selected is not null)
                 {
                     Player.Play();
                     SetPlaying(true);

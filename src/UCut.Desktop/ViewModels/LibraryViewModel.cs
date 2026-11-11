@@ -270,6 +270,7 @@ internal sealed class LibraryViewModel : ObservableObject
             return;
         }
 
+        Selected = null;
         _ = _main.RunJobAsync($"Recreate: {clips.Count} Clips", (progress, ct) => engine.RecreateAsync(clips, progress, ct), r =>
         {
             Selected = null;
@@ -295,6 +296,7 @@ internal sealed class LibraryViewModel : ObservableObject
 
         var options = vm.BuildOptions();
         var engine = _main.Engine;
+        Selected = null; // the player lets go of the video, so it can be overwritten
         _ = _main.RunJobAsync($"\"{card.Title}\" wird neu gemacht", async (progress, ct) =>
         {
             progress.Report(new UCut.App.BatchProgress(0, 1, card.Title));
