@@ -7,6 +7,7 @@ using UCut.Pipeline;
 using UCut.Settings;
 using UCut.Transcription;
 using UCut.Twitch;
+using UCut.Cli;
 
 // ucut – automatische Shorts aus OBS/Aitum-Clips.
 // Befehle:
@@ -62,7 +63,15 @@ try
             var max = TakeOption(arguments, "--max");
             var all = TakeFlag(arguments, "--alle");
             var listOnly = TakeFlag(arguments, "--liste");
-            return await TwitchAsync(since, until, max, all, listOnly);
+            KeepAwake.On();
+            try
+            {
+                return await TwitchAsync(since, until, max, all, listOnly);
+            }
+            finally
+            {
+                KeepAwake.Off();
+            }
         }
         default:
             PrintHelp();
