@@ -57,6 +57,12 @@ public sealed class UCutEngine : IDisposable
     public ClipPipeline Pipeline { get; }
     public GameDetector Games { get; }
     public TwitchApi Twitch { get; }
+
+    /// <summary>Upload to TikTok/YouTube/Instagram; accounts.json next to settings.json.</summary>
+    public UCut.Upload.UploadService Uploads => _uploads ??= new UCut.Upload.UploadService(
+        Settings.Upload, new UCut.Upload.AccountStore(UCut.Upload.AccountStore.DefaultPath()), Log);
+
+    private UCut.Upload.UploadService? _uploads;
     public bool UsesClaude { get; }
 
     /// <summary>Raised after each finished clip (library refresh).</summary>

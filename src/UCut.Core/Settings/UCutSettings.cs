@@ -26,6 +26,7 @@ public sealed class UCutSettings
     public GameSettings Games { get; set; } = new();
     public WriterSettings Writer { get; set; } = new();
     public TwitchClipSettings TwitchClips { get; set; } = new();
+    public UploadSettings Upload { get; set; } = new();
 
     internal static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -242,4 +243,37 @@ public sealed class TwitchClipSettings
         "digga", "alter", "bro", "cringe", "peinlich", "troll", "prank", "unnötig", "random", "sus", "omg", "nein",
         "warum", "was zur", "😂", "🤣", "💀", "😭",
     ];
+}
+
+/// <summary>
+/// Developer apps for uploading. Every platform only lets programs upload through an app the user registers once
+/// (like the Twitch app). The connected accounts themselves live in accounts.json.
+/// </summary>
+public sealed class UploadSettings
+{
+    /// <summary>Port for the sign-in answer: register http://127.0.0.1:PORT/callback/ as redirect address.</summary>
+    public int CallbackPort { get; set; } = 53682;
+
+    public string YouTubeClientId { get; set; } = "";
+    public string YouTubeClientSecret { get; set; } = "";
+
+    /// <summary>private, unlisted or public. Apps not checked by Google can only upload private videos.</summary>
+    public string YouTubePrivacy { get; set; } = "private";
+
+    /// <summary>YouTube category, 20 = Gaming.</summary>
+    public string YouTubeCategory { get; set; } = "20";
+
+    public string TikTokClientKey { get; set; } = "";
+    public string TikTokClientSecret { get; set; } = "";
+
+    /// <summary>inbox: the clip lands as draft in the TikTok app and is posted there. direct: posted at once (private until TikTok checked the app).</summary>
+    public string TikTokMode { get; set; } = "inbox";
+
+    public string InstagramAppId { get; set; } = "";
+    public string InstagramAppSecret { get; set; } = "";
+
+    /// <summary>Instagram only allows https redirects; the browser ends on this address and the user pastes it into UCut.</summary>
+    public string InstagramRedirectUri { get; set; } = "https://localhost/";
+
+    public string GraphApiVersion { get; set; } = "v24.0";
 }
