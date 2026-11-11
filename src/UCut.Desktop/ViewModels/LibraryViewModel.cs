@@ -21,6 +21,13 @@ internal sealed class ClipCard(LibraryClip clip) : ObservableObject
     public int? Funny => Clip.Metadata.Funniness?.Score;
     public string FunnyText => Funny is { } f ? $"😂 {f}/10" : "";
     public string FunnyReason => Clip.Metadata.Funniness?.Reason ?? "";
+    public string LaughText => Clip.Metadata.Laughs.Count switch
+    {
+        0 => "",
+        1 => $"1 Lacher erkannt (bei {Clip.Metadata.Laughs[0]:0.0} s)",
+        var n => $"{n} Lacher erkannt (bei {string.Join(", ", Clip.Metadata.Laughs.Select(l => l.ToString("0.0", System.Globalization.CultureInfo.GetCultureInfo("de-DE"))))} s)",
+    };
+    public bool HasYouTubeThumbnail => File.Exists(Clip.YouTubeThumbnailPath);
     public string SourceText => Clip.Metadata.Origin is { } o ? $"{o.Platform}-Clip · {o.Views} Aufrufe" : "Aufnahme";
     public string Layout => Clip.Metadata.Layout?.Status ?? "";
     public string Transcript => Clip.Metadata.Transcript;
@@ -87,6 +94,7 @@ internal sealed class LibraryViewModel : ObservableObject
         });
         PlayCommand = new RelayCommand(_ => { if (Selected is { } c) { Shell.Open(c.Clip.VideoPath); } }, _ => Selected is not null);
         ShowInFolderCommand = new RelayCommand(_ => { if (Selected is { } c) { Shell.ShowInExplorer(c.Clip.VideoPath); } }, _ => Selected is not null);
+        OpenYouTubeThumbnailCommand = new RelayCommand(_ => { if (Selected is { HasYouTubeThumbnail: true } c) { Shell.Open(c.Clip.YouTubeThumbnailPath); } }, _ => Selected is { HasYouTubeThumbnail: true });
         OpenOutputCommand = new RelayCommand(_ => Shell.Open(_main.Engine.Settings.OutputFolder));
         EditCommand = new RelayCommand(_ =>
         {
@@ -159,6 +167,7 @@ internal sealed class LibraryViewModel : ObservableObject
     public RelayCommand RefreshCommand { get; }
     public RelayCommand AddClipsCommand { get; }
     public RelayCommand PlayCommand { get; }
+    public RelayCommand OpenYouTubeThumbnailCommand { get; }
     public RelayCommand ShowInFolderCommand { get; }
     public RelayCommand OpenOutputCommand { get; }
     public RelayCommand EditCommand { get; }

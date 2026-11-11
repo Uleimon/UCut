@@ -44,7 +44,12 @@ public sealed class UCutEngine : IDisposable
         Ffmpeg = new Ffmpeg(settings.FfmpegPath, settings.FfprobePath);
         writer ??= settings.Writer.UseClaude && ClaudeClipWriter.IsAvailable ? new ClaudeClipWriter(settings.Writer.Model) : new TemplateClipWriter();
         UsesClaude = writer is not TemplateClipWriter;
-        Pipeline = new ClipPipeline(settings, Ffmpeg, transcriber ?? new WhisperTranscriber(settings.Whisper, log.Write), writer, log.Write);
+        Pipeline = new ClipPipeline(settings, Ffmpeg, transcriber ?? new WhisperTranscriber(settings.Whisper, log.Write), writer, log.Write)
+        {
+            Trends = UsesClaude && settings.Writer.TrendHashtags
+                ? new ClaudeTrendHashtags(settings.Writer.Model, ClaudeTrendHashtags.DefaultPath(settings.OutputFolder))
+                : null,
+        };
         Twitch = new TwitchApi(settings.Games, _http);
         Games = new GameDetector(settings.Games, [new TwitchGameSource(settings.Games, _http), new ProcessGameSource(settings.Games)], log.Write);
     }

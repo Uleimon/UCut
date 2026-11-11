@@ -63,6 +63,13 @@ public class PipelineTests
             Assert.Equal("Wer hat Kredit?", meta.Transcript);
             Assert.Contains("#gta5", meta.TikTok.Caption, StringComparison.Ordinal);
             Assert.Equal(25, meta.Score.Parts.Single(p => p.Name == "Hook").Points);
+
+            // Preview picture for YouTube next to the clip; a steady tone is no laugh.
+            var thumb = Path.ChangeExtension(result.VideoPath, ".youtube.jpg");
+            Assert.True(File.Exists(thumb));
+            var pic = await new Ffmpeg("ffmpeg", "ffprobe").ProbeAsync(thumb);
+            Assert.Equal((540, 960), (pic.Width, pic.Height));
+            Assert.Empty(meta.Laughs);
         }
         finally
         {

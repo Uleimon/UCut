@@ -50,6 +50,9 @@ public sealed class ClipPipeline(
 {
     private readonly TimeProvider _time = time ?? TimeProvider.System;
 
+    /// <summary>Trending hashtags per game (null = off).</summary>
+    public ITrendSource? Trends { get; init; }
+
     public Task<ClipResult> ProcessAsync(string sourceFile, GameResult game, ClipOrigin? origin = null, CancellationToken ct = default) =>
         ProcessAsync(sourceFile, game, origin, null, ct);
 
@@ -124,15 +127,32 @@ public sealed class ClipPipeline(
                 await File.WriteAllTextAsync(Path.Combine(work.FullName, assName), ass, ct).ConfigureAwait(false);
             }
 
+            var laughs = info.HasAudio ? await FindLaughsAsync(sourceFile, cut, clipTranscript, ct).ConfigureAwait(false) : LaughResult.None;
+
             // Text first: the title goes into the file name.
+            var previous = options?.Previous;
+            IReadOnlyList<string> trends = [];
+            if (previous is null && Trends is not null)
+            {
+                trends = await Trends.GetAsync(game.FolderName, ct).ConfigureAwait(false);
+                if (trends.Count > 0)
+                {
+                    log($"  Trend-Hashtags ({game.FolderName}): {string.Join(' ', trends)}");
+                }
+            }
+
             var context = new ClipContext(
                 clipTranscript.Text, game.FolderName, cut.Duration,
                 settings.Games.Hashtags.TryGetValue(game.FolderName, out var gameTags) ? gameTags : [],
-                settings.Games.CommonHashtags, settings.Writer.ChannelName);
-            var previous = options?.Previous;
+                settings.Games.CommonHashtags, settings.Writer.ChannelName, trends, laughs.Count);
             var text = previous is null
                 ? await WriteTextAsync(context, ct).ConfigureAwait(false)
                 : FromPrevious(previous);
+            if (text.Funniness is null && laughs.Count > 0)
+            {
+                // Without Claude: laughs are the best hint we have.
+                text = text with { Funniness = Math.Min(10, 3 + 2 * laughs.Count), FunninessReason = $"{laughs.Count} Lacher erkannt (ohne Claude geschätzt)" };
+            }
 
             var now = _time.GetLocalNow();
             // Old clips are named after the day they were recorded, so the game folder stays in order.
@@ -146,13 +166,20 @@ public sealed class ClipPipeline(
             log("  Video wird gerendert ...");
             await ProcessRunner.RunCheckedAsync(ffmpeg.FfmpegPath, RenderCommand.Build(job), work.FullName, ct).ConfigureAwait(false);
             File.Move(tmpOut, output, overwrite: true);
-            var thumb = Path.ChangeExtension(output, ".thumb.jpg");
-            if (File.Exists(thumb))
+            foreach (var stale in new[] { ".thumb.jpg", ".youtube.jpg" })
             {
-                File.Delete(thumb);
+                var old = Path.ChangeExtension(output, stale);
+                if (File.Exists(old))
+                {
+                    File.Delete(old);
+                }
             }
 
             var loudness = await ffmpeg.MeasureLoudnessAsync(output, ct).ConfigureAwait(false);
+            if (settings.Writer.YouTubeThumbnail)
+            {
+                await MakeYouTubeThumbnailAsync(output, text.Title, laughs, loudness, cut.Duration, outWidth, outHeight, work.FullName, ct).ConfigureAwait(false);
+            }
             var score = ClipScorer.Score(cut.Duration, clipTranscript, loudness, withCaptions);
 
             var meta = ClipMetadata.Create(output, Path.GetFullPath(sourceFile), game.FolderName, game.Source, cut.Duration, cut.Reason,
@@ -165,6 +192,7 @@ public sealed class ClipPipeline(
                 };
             }
 
+            meta.Laughs = [.. laughs.Moments];
             meta.Layout = new LayoutInfo { Status = layout.Status, CamEdge = layout.CamEdge, Notes = [.. layout.Notes] };
             meta.Edit = new EditInfo
             {
@@ -192,6 +220,42 @@ public sealed class ClipPipeline(
         finally
         {
             try { work.Delete(recursive: true); } catch (IOException) { }
+        }
+    }
+
+    private async Task<LaughResult> FindLaughsAsync(string source, CutPlan cut, Transcript clipTranscript, CancellationToken ct)
+    {
+        try
+        {
+            const int rate = 8000;
+            var pcm = await ffmpeg.ReadPcmAsync(source, cut.Start, cut.Duration, rate, ct).ConfigureAwait(false);
+            var laughs = LaughDetector.Detect(pcm, rate, clipTranscript);
+            if (laughs.Count > 0)
+            {
+                log($"  Lacher: {laughs.Count} (bei {string.Join(", ", laughs.Moments.Select(m => m.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " s"))})");
+            }
+
+            return laughs;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            log($"  Lacher-Erkennung übersprungen: {ex.Message}");
+            return LaughResult.None;
+        }
+    }
+
+    private async Task MakeYouTubeThumbnailAsync(string output, string title, LaughResult laughs, LoudnessProfile loudness, double duration, int width, int height, string work, CancellationToken ct)
+    {
+        try
+        {
+            var at = YouTubeThumbnail.PickMoment(laughs, loudness, duration);
+            await File.WriteAllTextAsync(Path.Combine(work, "thumb.ass"), YouTubeThumbnail.BuildAss(title, width, height, settings.Captions.Font), ct).ConfigureAwait(false);
+            await ProcessRunner.RunCheckedAsync(ffmpeg.FfmpegPath, YouTubeThumbnail.Command(output, at, "thumb.ass", Path.ChangeExtension(output, ".youtube.jpg")), work, ct).ConfigureAwait(false);
+            log($"  YouTube-Vorschaubild bei {at:0.0} s");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            log($"  YouTube-Vorschaubild ging nicht: {ex.Message}");
         }
     }
 

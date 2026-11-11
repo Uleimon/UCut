@@ -19,6 +19,9 @@ public sealed class ClipMetadata
     public double DurationSeconds { get; set; }
     public string? CutNote { get; set; }
     public string Transcript { get; set; } = "";
+
+    /// <summary>Seconds (from the clip start) where someone laughs.</summary>
+    public List<double> Laughs { get; set; } = [];
     public ScoreInfo Score { get; set; } = new();
     public FunninessInfo? Funniness { get; set; }
     public LayoutInfo? Layout { get; set; }

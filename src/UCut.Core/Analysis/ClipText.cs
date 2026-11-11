@@ -11,7 +11,10 @@ public sealed record ClipText(
     string? FunninessReason,
     string Source);
 
-public sealed record ClipContext(string Transcript, string Game, double DurationSeconds, IReadOnlyList<string> GameHashtags, IReadOnlyList<string> CommonHashtags, string ChannelName);
+/// <param name="TrendHashtags">Hashtags popular right now for the game (may be empty).</param>
+/// <param name="Laughs">Laughs found in the sound or the transcript.</param>
+public sealed record ClipContext(string Transcript, string Game, double DurationSeconds, IReadOnlyList<string> GameHashtags, IReadOnlyList<string> CommonHashtags, string ChannelName,
+    IReadOnlyList<string>? TrendHashtags = null, int Laughs = 0);
 
 public interface IClipWriter
 {
@@ -29,7 +32,9 @@ public sealed class TemplateClipWriter : IClipWriter
             title = $"{context.Game} Clip";
         }
 
-        var tags = context.GameHashtags.Concat(context.CommonHashtags).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        // Two trending tags of the game ride along (the first ones are the most specific).
+        var tags = context.GameHashtags.Concat((context.TrendHashtags ?? []).Take(2)).Concat(context.CommonHashtags)
+                          .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var tagLine = string.Join(' ', tags);
         return Task.FromResult(new ClipText(
             title,

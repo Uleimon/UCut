@@ -210,6 +210,12 @@ public sealed class WriterSettings
 
     /// <summary>Channel name used in descriptions.</summary>
     public string ChannelName { get; set; } = "Uleimon";
+
+    /// <summary>Let Claude look up hashtags trending this week per game (web search, cached 3 days per game).</summary>
+    public bool TrendHashtags { get; set; } = true;
+
+    /// <summary>Make a preview picture for YouTube (funniest moment + title) and upload it with the video.</summary>
+    public bool YouTubeThumbnail { get; set; } = true;
 }
 
 /// <summary>Old Twitch clips of the channel: search, pre-filter for funny ones, download and process (ucut twitch).</summary>

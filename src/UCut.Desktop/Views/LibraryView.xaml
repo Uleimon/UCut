@@ -185,6 +185,7 @@
                         </Border>
                     </WrapPanel>
                     <TextBlock Style="{StaticResource Hint}" Text="{Binding FunnyReason}" Visibility="{Binding FunnyReason, Converter={StaticResource NullToVis}}"/>
+                    <TextBlock Style="{StaticResource Hint}" Text="{Binding LaughText, Mode=OneWay}" Visibility="{Binding LaughText, Converter={StaticResource NullToVis}}"/>
 
                     <WrapPanel Margin="0,12,0,4" DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
                         <Button Style="{StaticResource Primary}" Command="{Binding EditCommand}" Margin="0,0,8,8">
@@ -257,6 +258,10 @@
                             <TextBox Style="{StaticResource SectionBox}" Text="{Binding YouTubeDescription, UpdateSourceTrigger=PropertyChanged}" MinHeight="60"/>
                             <TextBlock Style="{StaticResource Subtle}" Text="Tags"/>
                             <TextBox Style="{StaticResource SectionBox}" Text="{Binding YouTubeTags, UpdateSourceTrigger=LostFocus}"/>
+                            <Button Content="Vorschaubild ansehen" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                    ToolTip="Lustigste Stelle mit Titel. Wird beim Hochladen auf YouTube automatisch mitgeschickt."
+                                    Visibility="{Binding HasYouTubeThumbnail, Converter={StaticResource BoolToVis}}"
+                                    Command="{Binding DataContext.OpenYouTubeThumbnailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource Card}">

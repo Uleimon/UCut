@@ -109,6 +109,29 @@ public sealed partial class Ffmpeg(string ffmpegPath, string ffprobePath)
         }
     }
 
+    /// <summary>Mono 16-bit samples of a stretch of the sound (for the laugh detector).</summary>
+    public async Task<short[]> ReadPcmAsync(string file, double start, double duration, int sampleRate, CancellationToken ct = default)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"ucut-pcm-{Guid.NewGuid():N}.raw");
+        try
+        {
+            var ci = CultureInfo.InvariantCulture;
+            await ProcessRunner.RunCheckedAsync(FfmpegPath,
+            [
+                "-v", "error", "-y", "-ss", start.ToString("0.###", ci), "-t", duration.ToString("0.###", ci), "-i", file,
+                "-vn", "-ac", "1", "-ar", sampleRate.ToString(ci), "-f", "s16le", tmp,
+            ], ct: ct).ConfigureAwait(false);
+            var bytes = await File.ReadAllBytesAsync(tmp, ct).ConfigureAwait(false);
+            var samples = new short[bytes.Length / 2];
+            Buffer.BlockCopy(bytes, 0, samples, 0, samples.Length * 2);
+            return samples;
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+    }
+
     [GeneratedRegex(@"t:\s*(?<t>[0-9.]+)\s+TARGET:.*?M:\s*(?<m>-?[0-9.]+|-inf)", RegexOptions.CultureInvariant)]
     private static partial Regex Ebur128Line();
 }

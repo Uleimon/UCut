@@ -127,6 +127,8 @@ internal sealed class SettingsViewModel : ObservableObject
     public string TwitchClientSecret { get => _s.Games.TwitchClientSecret; set { _s.Games.TwitchClientSecret = value.Trim(); OnPropertyChanged(); } }
     public string ClaudeKey { get => _claudeKey; set => Set(ref _claudeKey, value.Trim()); }
     public bool UseClaude { get => _s.Writer.UseClaude; set { _s.Writer.UseClaude = value; OnPropertyChanged(); } }
+    public bool TrendHashtags { get => _s.Writer.TrendHashtags; set { _s.Writer.TrendHashtags = value; OnPropertyChanged(); } }
+    public bool YouTubeThumbnail { get => _s.Writer.YouTubeThumbnail; set { _s.Writer.YouTubeThumbnail = value; OnPropertyChanged(); } }
     public string ChannelName { get => _s.Writer.ChannelName; set { _s.Writer.ChannelName = value; OnPropertyChanged(); } }
     public string CommonHashtags { get => string.Join(" ", _s.Games.CommonHashtags); set { _s.Games.CommonHashtags = value.Split(' ', StringSplitOptions.RemoveEmptyEntries); OnPropertyChanged(); } }
 

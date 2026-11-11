@@ -12,6 +12,9 @@ public sealed class LibraryClip(string videoPath, string metadataPath, ClipMetad
     public ClipMetadata Metadata { get; } = metadata;
     public string ThumbnailPath => Path.ChangeExtension(VideoPath, ".thumb.jpg");
 
+    /// <summary>Preview picture for YouTube (frame at the funniest moment with the title on it).</summary>
+    public string YouTubeThumbnailPath => Path.ChangeExtension(VideoPath, ".youtube.jpg");
+
     /// <summary>When it was recorded: Twitch date for old clips, otherwise when UCut made it.</summary>
     public DateTimeOffset Date => Metadata.Origin?.RecordedAt ?? Metadata.CreatedAt;
 
@@ -85,7 +88,7 @@ public static class ClipLibrary
     /// <summary>Deletes video, info file and preview picture.</summary>
     public static void Delete(LibraryClip clip)
     {
-        foreach (var p in new[] { clip.VideoPath, clip.MetadataPath, clip.ThumbnailPath })
+        foreach (var p in new[] { clip.VideoPath, clip.MetadataPath, clip.ThumbnailPath, clip.YouTubeThumbnailPath })
         {
             if (File.Exists(p))
             {

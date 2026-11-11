@@ -80,7 +80,8 @@ public sealed class UploadService
         var m = clip.Metadata;
         return platform switch
         {
-            UploadPlatform.YouTube => new UploadRequest(clip.VideoPath, m.YouTube.Title, m.YouTube.Description, m.YouTube.Tags, m.YouTube.Title),
+            UploadPlatform.YouTube => new UploadRequest(clip.VideoPath, m.YouTube.Title, m.YouTube.Description, m.YouTube.Tags, m.YouTube.Title,
+                File.Exists(clip.YouTubeThumbnailPath) ? clip.YouTubeThumbnailPath : null),
             UploadPlatform.TikTok => new UploadRequest(clip.VideoPath, m.YouTube.Title, "", [], m.TikTok.Caption),
             _ => new UploadRequest(clip.VideoPath, m.YouTube.Title, "", [], m.Instagram.Caption),
         };

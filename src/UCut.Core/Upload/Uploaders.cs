@@ -5,7 +5,7 @@ using UCut.Settings;
 namespace UCut.Upload;
 
 /// <summary>What to post. Each platform takes the fields it uses.</summary>
-public sealed record UploadRequest(string VideoPath, string Title, string Description, IReadOnlyList<string> Tags, string Caption);
+public sealed record UploadRequest(string VideoPath, string Title, string Description, IReadOnlyList<string> Tags, string Caption, string? ThumbnailPath = null);
 
 /// <summary>Result of one upload. Url is empty when the platform gives none (TikTok drafts).</summary>
 public sealed record UploadResult(string Id, string Url, string Note);
@@ -51,6 +51,7 @@ public sealed class YouTubeUploader(UploadSettings settings, HttpClient http) : 
     internal const string TokenUrl = "https://oauth2.googleapis.com/token";
     internal const string ApiUrl = "https://www.googleapis.com/youtube/v3/";
     internal const string UploadUrl = "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status";
+    internal const string ThumbnailUrl = "https://www.googleapis.com/upload/youtube/v3/thumbnails/set";
     private const string Scopes = "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly";
 
     public UploadPlatform Platform => UploadPlatform.YouTube;
@@ -121,7 +122,35 @@ public sealed class YouTubeUploader(UploadSettings settings, HttpClient http) : 
         var note = settings.YouTubePrivacy == "private"
             ? "privat hochgeladen, in YouTube Studio auf öffentlich stellen"
             : $"hochgeladen ({settings.YouTubePrivacy})";
+        if (req.ThumbnailPath is { } thumb && File.Exists(thumb))
+        {
+            note += await SetThumbnailAsync(account, id, thumb, ct).ConfigureAwait(false);
+        }
+
         return new UploadResult(id, $"https://youtube.com/shorts/{id}", note);
+    }
+
+    /// <summary>
+    /// Sets UCut's preview picture. YouTube only allows this for channels with "Erweiterte Funktionen" (phone-verified);
+    /// a refusal is not an error, the video is up anyway.
+    /// </summary>
+    private async Task<string> SetThumbnailAsync(UploadAccount account, string videoId, string path, CancellationToken ct)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri($"{ThumbnailUrl}?videoId={Uri.EscapeDataString(videoId)}"))
+            {
+                Content = new ByteArrayContent(await File.ReadAllBytesAsync(path, ct).ConfigureAwait(false)),
+            };
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", account.AccessToken);
+            await HttpJson.SendAsync(http, request, "YouTube-Vorschaubild", ct).ConfigureAwait(false);
+            return ", Vorschaubild gesetzt";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException)
+        {
+            return $", Vorschaubild ging nicht ({ex.Message}). Tipp: Kanal unter youtube.com/verify bestätigen";
+        }
     }
 
     private async Task EnsureTokenAsync(UploadAccount account, CancellationToken ct)

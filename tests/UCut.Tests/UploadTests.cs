@@ -96,6 +96,34 @@ public sealed class UploadTests : IDisposable
         Assert.Equal(1.0, progress[^1]);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task YouTube_sets_preview_picture_and_survives_a_refusal(bool allowed)
+    {
+        var api = new FakeApi(
+            (Url("upload/youtube/v3/videos?uploadType=resumable"), _ =>
+            {
+                var r = Json("{}");
+                r.Headers.Location = new Uri("https://www.googleapis.com/upload/session/xyz");
+                return r;
+            }),
+            (Url("upload/session/xyz"), _ => Json("""{"id":"VID123"}""")),
+            (Url("thumbnails/set?videoId=VID123"), _ => allowed
+                ? Json("""{"items":[]}""")
+                : Json("""{"error":{"message":"The authenticated user doesn't have permissions to upload and set custom video thumbnails."}}""", HttpStatusCode.Forbidden)));
+        var thumb = Path.Combine(_dir, "clip.youtube.jpg");
+        File.WriteAllBytes(thumb, [0xFF, 0xD8, 0xFF, 0xD9]);
+        var uploader = new YouTubeUploader(new UploadSettings { YouTubeClientId = "cid", YouTubeClientSecret = "sec" }, new HttpClient(api));
+
+        var result = await uploader.UploadAsync(Fresh(UploadPlatform.YouTube), new UploadRequest(Video(100), "T", "", [], "", thumb), null, default);
+
+        Assert.Equal("https://youtube.com/shorts/VID123", result.Url);
+        var set = api.Requests.Single(r => r.Url.Contains("thumbnails/set", StringComparison.Ordinal));
+        Assert.Equal("image/jpeg", set.Request.Content!.Headers.ContentType!.MediaType);
+        Assert.Contains(allowed ? "Vorschaubild gesetzt" : "Vorschaubild ging nicht", result.Note, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task YouTube_refreshes_expired_token_first()
     {

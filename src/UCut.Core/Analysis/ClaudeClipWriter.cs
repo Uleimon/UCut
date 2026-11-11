@@ -54,6 +54,8 @@ public sealed class ClaudeClipWriter(string model) : IClipWriter
             Kanal: {context.ChannelName}
             Vorgegebene Spiel-Hashtags: {string.Join(' ', context.GameHashtags)}
             Allgemeine Hashtags: {string.Join(' ', context.CommonHashtags)}
+            Gerade beliebte Hashtags zum Spiel (1 bis 2 davon mitnehmen, wenn sie passen): {(context.TrendHashtags is { Count: > 0 } trends ? string.Join(' ', trends) : "(keine)")}
+            Lacher im Ton erkannt: {context.Laughs} (Hinweis für die Lustigkeit, Lachen im Clip ist meist ein gutes Zeichen)
 
             Transkript:
             {(string.IsNullOrWhiteSpace(context.Transcript) ? "(es wird nichts gesagt)" : context.Transcript)}

@@ -70,6 +70,8 @@
                     <StackPanel>
                         <TextBlock Style="{StaticResource H2}" Text="Claude: Lustigkeit, Titel und Hashtags"/>
                         <CheckBox Content="Claude benutzen" IsChecked="{Binding UseClaude}"/>
+                        <CheckBox Content="Trend-Hashtags pro Spiel suchen (Claude sucht im Web, einmal alle 3 Tage pro Spiel)" IsChecked="{Binding TrendHashtags}" Margin="0,6,0,0"/>
+                        <CheckBox Content="YouTube-Vorschaubild machen (lustigste Stelle mit Titel) und mit hochladen" IsChecked="{Binding YouTubeThumbnail}" Margin="0,6,0,0"/>
                         <TextBlock Style="{StaticResource Field}" Text="API-Schlüssel (console.anthropic.com, rund 2 Cent pro Clip). Wird für deinen Windows-Benutzer gespeichert."/>
                         <TextBox Text="{Binding ClaudeKey}" FontFamily="Consolas"/>
                         <Button Content="Anthropic-Konsole öffnen" Command="{Binding AnthropicConsoleCommand}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
