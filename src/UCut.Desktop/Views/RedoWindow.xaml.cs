@@ -6,7 +6,7 @@ using UCut.Editing;
 
 namespace UCut.Desktop.Views;
 
-/// <summary>"Neu machen" dialog: draw the cam on a still picture, pick the layout, correct the caption words.</summary>
+/// <summary>"Create" dialog: draw the cam on a still picture, pick the layout, correct the caption words.</summary>
 public partial class RedoWindow : Window
 {
     private Point? _start;

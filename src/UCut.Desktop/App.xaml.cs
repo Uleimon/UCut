@@ -49,7 +49,7 @@ public partial class App : Application
             SettingsStore.Save(s, settingsPath);
         }
 
-        _main = new MainViewModel(settingsPath, new WpfDialogs(), Dispatcher);
+        _main = new MainViewModel(settingsPath, new WpfDialogs(), Dispatcher) { AutoInstallTools = !_selfTest };
         var window = new MainWindow { DataContext = _main };
         window.Show();
         _main.Library.Refresh();
@@ -98,7 +98,7 @@ public partial class App : Application
                 await Task.Delay(500);
                 Console.Out.WriteLine($"import ok: {main.Import.Items.Count} item(s)");
 
-                // A finished clip in the gallery: details with upload box, then the "Neu machen" dialog with a cam drawn.
+                // A finished clip in the gallery: details with upload box, then the "Create" dialog with a cam drawn.
                 var gameDir = Path.Combine(main.Engine.Settings.OutputFolder, "Test");
                 Directory.CreateDirectory(gameDir);
                 var clipPath = Path.Combine(gameDir, "2026-01-01_120000_selbsttest.mp4");

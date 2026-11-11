@@ -194,7 +194,7 @@
                         <Button Command="{Binding RedoCommand}" Margin="0,0,8,8" ToolTip="Cam von Hand setzen, ohne Cam machen oder Untertitel korrigieren">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" Margin="0,0,8,0"/>
-                                <TextBlock Text="Neu machen"/>
+                                <TextBlock Text="Create"/>
                             </StackPanel>
                         </Button>
                         <Button Style="{StaticResource IconButton}" Content="&#xE768;" ToolTip="Im Videoplayer abspielen" Command="{Binding PlayCommand}" Margin="0,0,8,8"/>

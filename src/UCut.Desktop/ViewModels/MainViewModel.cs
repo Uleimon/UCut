@@ -19,6 +19,7 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
     private double _jobProgress;
     private bool _isWatching;
     private string _toolWarning = "";
+    private bool _autoInstallTried;
 
     public MainViewModel(string settingsPath, IDialogs dialogs, Dispatcher ui)
     {
@@ -158,6 +159,67 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
 
         ToolWarning = string.Join(" · ", missing);
         Settings.UpdateTools(t);
+        if (missing.Count == 0 || UseDownloadedTools())
+        {
+            return;
+        }
+
+        if (AutoInstallTools && !_autoInstallTried)
+        {
+            // Nobody should have to install ffmpeg or yt-dlp by hand: fetch them once, in the background.
+            _autoInstallTried = true;
+            await InstallToolsAsync(!t.Ffmpeg, !t.YtDlp);
+        }
+    }
+
+    /// <summary>Off in the self-test, so CI never downloads anything.</summary>
+    public bool AutoInstallTools { get; set; } = true;
+
+    /// <summary>Downloads the missing programs into %LOCALAPPDATA%\UCut\tools and points the settings at them.</summary>
+    public Task InstallToolsAsync(bool ffmpeg, bool ytDlp)
+    {
+        var installer = new ToolInstaller(new System.Net.Http.HttpClient { Timeout = Timeout.InfiniteTimeSpan }, ToolInstaller.DefaultFolder);
+        var names = string.Join(" und ", new[] { ffmpeg ? "ffmpeg" : null, ytDlp ? "yt-dlp" : null }.Where(n => n is not null));
+        Log.Write($"{names} fehlt, wird automatisch heruntergeladen ...");
+        return RunJobAsync($"{names} wird eingerichtet (einmalig)", async (progress, ct) =>
+        {
+            var p = new Progress<(string Step, double Share)>(x => progress.Report(new BatchProgress((int)(x.Share * 100), 100, x.Step)));
+            await installer.InstallAsync(ffmpeg, ytDlp, p, ct);
+            return new BatchResult(1, 0, false);
+        }, _ =>
+        {
+            Log.Write($"{names} eingerichtet.");
+            UseDownloadedTools();
+        });
+    }
+
+    /// <summary>When programs were downloaded earlier but the settings still point elsewhere: use the downloaded ones.</summary>
+    private bool UseDownloadedTools()
+    {
+        var found = new ToolInstaller(new System.Net.Http.HttpClient(), ToolInstaller.DefaultFolder).Existing();
+        var s = SettingsStore.Load(SettingsPath);
+        var changed = false;
+        if (found.Ffmpeg is not null && found.Ffprobe is not null && !string.Equals(s.FfmpegPath, found.Ffmpeg, StringComparison.OrdinalIgnoreCase))
+        {
+            (s.FfmpegPath, s.FfprobePath) = (found.Ffmpeg, found.Ffprobe);
+            changed = true;
+        }
+
+        if (found.YtDlp is not null && !string.Equals(s.TwitchClips.YtDlpPath, found.YtDlp, StringComparison.OrdinalIgnoreCase))
+        {
+            s.TwitchClips.YtDlpPath = found.YtDlp;
+            changed = true;
+        }
+
+        if (!changed)
+        {
+            return false;
+        }
+
+        SettingsStore.Save(s, SettingsPath);
+        ReloadEngine();
+        Settings.ReloadCommand.Execute(null);
+        return true;
     }
 
     /// <summary>Runs one long job at a time on a background thread, with progress, cancel and keep-awake.</summary>

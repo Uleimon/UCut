@@ -21,7 +21,7 @@ internal sealed class WordItem(double start, double end, string text) : Observab
 }
 
 /// <summary>
-/// "Neu machen": layout (cam on top with a rectangle drawn by hand, no cam, blurred edges) and corrected caption words.
+/// "Create": layout (cam on top with a rectangle drawn by hand, no cam, blurred edges) and corrected caption words.
 /// The clip is rendered again from its original and replaces the old file; texts and uploads stay.
 /// </summary>
 internal sealed class RedoViewModel : ObservableObject

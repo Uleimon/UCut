@@ -62,9 +62,7 @@ internal sealed class SettingsViewModel : ObservableObject
                 }
             }
         });
-        InstallCommand = new RelayCommand(p => Shell.RunInConsole(p is "ytdlp"
-            ? "winget install --id yt-dlp.yt-dlp -e && echo. && echo Fertig. UCut einmal neu starten."
-            : "winget install --id Gyan.FFmpeg -e && echo. && echo Fertig. UCut einmal neu starten."));
+        InstallCommand = new RelayCommand(p => _ = _main.InstallToolsAsync(p is "ffmpeg", p is "ytdlp"));
         TwitchConsoleCommand = new RelayCommand(_ => Shell.Open("https://dev.twitch.tv/console/apps"));
         AnthropicConsoleCommand = new RelayCommand(_ => Shell.Open("https://console.anthropic.com/settings/keys"));
     }

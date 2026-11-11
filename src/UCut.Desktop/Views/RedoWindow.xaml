@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:UCut.Desktop"
-        Title="Clip neu machen" Width="1180" Height="760" MinWidth="900" MinHeight="560"
+        Title="Create" Width="1180" Height="760" MinWidth="900" MinHeight="560"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource WindowBrush}" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
         Foreground="{StaticResource TextBrush}" Icon="pack://application:,,,/Assets/ucut-256.png">
@@ -13,14 +13,14 @@
     </Window.Resources>
     <DockPanel Margin="20">
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-            <TextBlock Style="{StaticResource H1}" Text="Clip neu machen"/>
+            <TextBlock Style="{StaticResource H1}" Text="Create: Clip neu machen"/>
             <TextBlock Style="{StaticResource Subtle}" Text="{Binding Title}"/>
         </StackPanel>
 
         <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
             <Button DockPanel.Dock="Right" Content="Abbrechen" IsCancel="True" Margin="0"/>
             <Button DockPanel.Dock="Right" Style="{StaticResource Primary}" Click="OnRun">
-                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="Neu machen" Foreground="White"/></StackPanel>
+                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="Create" Foreground="White"/></StackPanel>
             </Button>
             <TextBlock Text="{Binding Status}" Foreground="{StaticResource WarnBrush}" VerticalAlignment="Center" TextWrapping="Wrap"/>
         </DockPanel>
