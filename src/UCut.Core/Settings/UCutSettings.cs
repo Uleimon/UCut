@@ -260,6 +260,9 @@ public sealed class TwitchClipSettings
 /// </summary>
 public sealed class UploadSettings
 {
+    /// <summary>Show the step-by-step window after "Hochladen" (by hand). Off = "nie wieder anzeigen".</summary>
+    public bool ShowUploadHint { get; set; } = true;
+
     /// <summary>Port for the sign-in answer: register http://127.0.0.1:PORT/callback/ as redirect address.</summary>
     public int CallbackPort { get; set; } = 53682;
 

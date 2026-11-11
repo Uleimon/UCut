@@ -228,12 +228,25 @@ internal sealed class LibraryViewModel : ObservableObject
                 _ => "https://www.tiktok.com/tiktokstudio/upload",
             });
             _main.Log.Write("Hochladen: Clip in den Browser ziehen, Text mit Strg+V einfügen.");
-            _main.Dialogs.Info("Hochladen", p switch
+            if (_hideUploadHint || !_main.Engine.Settings.Upload.ShowUploadHint)
+            {
+                return;
+            }
+
+            var answer = _main.Dialogs.Hint("Hochladen", p switch
             {
                 "youtube" => "1. Zieh die markierte Datei aus dem Explorer in YouTube Studio.\n2. Der Titel steht dann schon drin (die Datei heißt so).\n3. Klick in „Beschreibung“ und drück Strg+V. Da kommen Beschreibung und Hashtags rein.\n\nWenn es online ist: in UCut bei YouTube den Haken „Hochgeladen“ setzen.",
                 "instagram" => "1. Zieh die markierte Datei aus dem Explorer in Instagram.\n2. Klick in die Bildunterschrift und drück Strg+V.\n\nWenn es online ist: in UCut bei Instagram den Haken „Hochgeladen“ setzen.",
                 _ => "1. Zieh die markierte Datei aus dem Explorer in TikTok Studio.\n2. Die Beschreibung mit Hashtags steht dann schon drin (die Datei heißt so).\n3. Falls etwas fehlt: in „Beschreibung“ klicken, Strg+A, dann Strg+V.\n\nWenn es online ist: in UCut bei TikTok den Haken „Hochgeladen“ setzen.",
             });
+            if (answer == HintAnswer.HideThisSession)
+            {
+                _hideUploadHint = true;
+            }
+            else if (answer == HintAnswer.HideForever)
+            {
+                _main.SetShowUploadHint(false);
+            }
         }, _ => Selected is not null);
         RedoCommand = new RelayCommand(_ => Redo(), _ => Selected is not null && !_main.JobRunning);
         RecreateAllCommand = new RelayCommand(_ => RecreateAll(), _ => Clips.Count > 0 && !_main.JobRunning);
@@ -280,6 +293,7 @@ internal sealed class LibraryViewModel : ObservableObject
     public RelayCommand RedoCommand { get; }
     public RelayCommand RecreateAllCommand { get; }
     public RelayCommand ClearUploadFolderCommand { get; }
+    private bool _hideUploadHint;
     public RelayCommand OpenUploadFolderCommand { get; }
     public AsyncCommand UploadNowCommand { get; }
     public RelayCommand ManageAccountsCommand { get; }

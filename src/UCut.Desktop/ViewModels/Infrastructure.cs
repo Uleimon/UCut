@@ -82,6 +82,9 @@ internal interface IDialogs
 {
     bool Confirm(string title, string message, bool dangerous = false);
     void Info(string title, string message);
+
+    /// <summary>Info with "Für diese Sitzung nicht mehr anzeigen" and "Nie wieder anzeigen".</summary>
+    HintAnswer Hint(string title, string message);
     string? PickFolder(string title);
     IReadOnlyList<string> PickFiles(string title, string filter, bool multiple);
     string? SaveFile(string title, string fileName, string filter);
@@ -90,8 +93,37 @@ internal interface IDialogs
     string? Ask(string title, string message);
 }
 
+internal enum HintAnswer
+{
+    Ok,
+    HideThisSession,
+    HideForever,
+}
+
 internal sealed class WpfDialogs : IDialogs
 {
+    public HintAnswer Hint(string title, string message)
+    {
+        var session = new System.Windows.Controls.CheckBox { Content = "Für diese Sitzung nicht mehr anzeigen", Margin = new System.Windows.Thickness(0, 14, 0, 0) };
+        var never = new System.Windows.Controls.CheckBox { Content = "Nie wieder anzeigen (in den Einstellungen wieder einschaltbar)", Margin = new System.Windows.Thickness(0, 6, 0, 0) };
+        session.Checked += (_, _) => never.IsChecked = false;
+        never.Checked += (_, _) => session.IsChecked = false;
+        var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, IsCancel = true, Padding = new System.Windows.Thickness(24, 6, 24, 6), HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Margin = new System.Windows.Thickness(0, 16, 0, 0) };
+        var panel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(22) };
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = message, TextWrapping = System.Windows.TextWrapping.Wrap, MaxWidth = 480 });
+        panel.Children.Add(session);
+        panel.Children.Add(never);
+        panel.Children.Add(ok);
+        var window = new System.Windows.Window
+        {
+            Title = title, Content = panel, SizeToContent = System.Windows.SizeToContent.WidthAndHeight, ResizeMode = System.Windows.ResizeMode.NoResize,
+            WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner, Owner = System.Windows.Application.Current?.MainWindow,
+        };
+        ok.Click += (_, _) => window.Close();
+        window.ShowDialog();
+        return never.IsChecked == true ? HintAnswer.HideForever : session.IsChecked == true ? HintAnswer.HideThisSession : HintAnswer.Ok;
+    }
+
     public const string VideoFilter = "Videos|*.mp4;*.mkv;*.mov|Alle Dateien|*.*";
     public const string AudioFilter = "Audio|*.mp3;*.wav;*.m4a;*.aac;*.ogg;*.flac|Alle Dateien|*.*";
 

@@ -193,6 +193,23 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
         });
     }
 
+    /// <summary>Saves the "show the upload steps" switch without touching the other settings.</summary>
+    public void SetShowUploadHint(bool show)
+    {
+        Engine.Settings.Upload.ShowUploadHint = show;
+        try
+        {
+            var s = SettingsStore.Load(SettingsPath);
+            s.Upload.ShowUploadHint = show;
+            SettingsStore.Save(s, SettingsPath);
+            Settings.ReloadCommand.Execute(null);
+        }
+        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException)
+        {
+            Log.Write($"Einstellung nicht gespeichert: {ex.Message}");
+        }
+    }
+
     /// <summary>When programs were downloaded earlier but the settings still point elsewhere: use the downloaded ones.</summary>
     private bool UseDownloadedTools()
     {
