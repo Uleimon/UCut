@@ -68,6 +68,22 @@
 
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
+                        <TextBlock Style="{StaticResource H2}" Text="Tablet-App"/>
+                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
+                                   Text="Mit der UCut-App auf dem Tablet (Android) siehst du deine Clips, änderst Texte, schickst Clips an TikTok, YouTube oder Instagram und setzt den Haken „Hochgeladen“. PC und Tablet müssen im selben WLAN sein, UCut muss am PC laufen. Beim ersten Mal fragt Windows, ob UCut ins Netzwerk darf: auf „Zulassen“ klicken."/>
+                        <CheckBox Content="Tablet-App erlauben" IsChecked="{Binding TabletEnabled}" Margin="0,6,0,0"/>
+                        <TextBlock Text="{Binding TabletStatus}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <WrapPanel Margin="0,10,0,0">
+                            <TextBlock Style="{StaticResource Subtle}" Text="Port" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBox Text="{Binding TabletPort}" Width="80" Margin="0,0,12,0"/>
+                            <Button Content="Neuen Code machen" Command="{Binding NewTabletCodeCommand}"/>
+                        </WrapPanel>
+                        <TextBlock Style="{StaticResource Hint}" Text="Nach dem Anhaken oben auf „Speichern“ drücken."/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
                         <TextBlock Style="{StaticResource H2}" Text="Claude: Lustigkeit, Titel und Hashtags"/>
                         <CheckBox Content="Claude benutzen" IsChecked="{Binding UseClaude}"/>
                         <CheckBox Content="Trend-Hashtags pro Spiel suchen (Claude sucht im Web, einmal alle 3 Tage pro Spiel)" IsChecked="{Binding TrendHashtags}" Margin="0,6,0,0"/>

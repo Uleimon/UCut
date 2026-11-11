@@ -42,6 +42,9 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
         Import = new ImportViewModel(this);
         Twitch = new TwitchViewModel(this);
         Settings = new SettingsViewModel(this);
+        Tablet = new UCut.Tablet.TabletServer(() => Engine.Settings);
+        Tablet.ClipsChanged += () => _ui.BeginInvoke(() => Library.Refresh());
+        _ = _ui.BeginInvoke(() => _ = ApplyTabletAsync(), DispatcherPriority.Background);
 
         NavigateCommand = new RelayCommand(p => Page = p?.ToString() ?? "library");
         CancelJobCommand = new RelayCommand(_ => _jobCts?.Cancel(), _ => JobRunning);
@@ -58,6 +61,59 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
     public ImportViewModel Import { get; }
     public TwitchViewModel Twitch { get; }
     public SettingsViewModel Settings { get; }
+    public UCut.Tablet.TabletServer Tablet { get; }
+
+    private string _tabletStatus = "Aus.";
+
+    /// <summary>What the settings page shows about the tablet connection (address and code).</summary>
+    public string TabletStatus { get => _tabletStatus; private set => Set(ref _tabletStatus, value); }
+
+    /// <summary>Starts, restarts or stops the tablet connection to match the settings.</summary>
+    public async Task ApplyTabletAsync()
+    {
+        var t = Engine.Settings.Tablet;
+        if (!t.Enabled)
+        {
+            await Tablet.StopAsync();
+            TabletStatus = "Aus.";
+            return;
+        }
+
+        if (t.Code.Length != 6)
+        {
+            t.Code = UCut.Tablet.TabletServer.NewCode();
+            try
+            {
+                var saved = SettingsStore.Load(SettingsPath);
+                saved.Tablet.Code = t.Code;
+                SettingsStore.Save(saved, SettingsPath);
+                Settings.ReloadCommand.Execute(null);
+            }
+            catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException)
+            {
+                Log.Write($"Tablet-Code nicht gespeichert: {ex.Message}");
+            }
+        }
+
+        if (Tablet.Running && Tablet.Port == t.Port && Tablet.Code == t.Code)
+        {
+            return;
+        }
+
+        try
+        {
+            await Tablet.StartAsync(t.Port, t.Code);
+            var addresses = UCut.Tablet.TabletServer.LocalAddresses();
+            var where = addresses.Count == 0 ? $"Port {t.Port}" : string.Join(" oder ", addresses.Select(a => $"{a}:{t.Port}"));
+            TabletStatus = $"An. Die Tablet-App findet den PC von selbst (sonst Adresse eingeben: {where}). Code: {t.Code}";
+            Log.Write($"Tablet-Verbindung an: {where}");
+        }
+        catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or InvalidOperationException)
+        {
+            TabletStatus = $"Ging nicht an: {ex.Message} (anderer Port in den Einstellungen?)";
+            Log.Write($"Tablet-Verbindung: {ex.Message}");
+        }
+    }
     public LogViewModel LogPage { get; }
 
     public RelayCommand NavigateCommand { get; }
@@ -137,6 +193,7 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(WatchFolder));
         Library.Refresh();
         _ = CheckToolsAsync();
+        _ = ApplyTabletAsync();
         if (watching)
         {
             _ui.BeginInvoke(StartWatching, DispatcherPriority.Background);
@@ -331,6 +388,7 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
         _watchCts?.Cancel();
         _jobCts?.Cancel();
         Shell.KeepAwake(false);
+        Tablet.StopAsync().GetAwaiter().GetResult();
         Engine.Dispose();
     }
 }

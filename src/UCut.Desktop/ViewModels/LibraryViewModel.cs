@@ -54,37 +54,23 @@ internal sealed class ClipCard(LibraryClip clip) : ObservableObject
         ? "Noch nirgends hochgeladen."
         : string.Join("\n", Clip.Metadata.Uploaded.Select(u => $"{u.Key}: {u.Value}"));
 
-    private static readonly string[] Platforms = ["TikTok", "YouTube", "Instagram"];
-
     public bool IsUploaded => Clip.Metadata.Uploaded.Count > 0;
 
     public string UploadedPlatforms => "Hochgeladen auf: " + string.Join(", ",
-        Platforms.Where(HasUpload).DefaultIfEmpty("(anderswo)"));
+        UploadMarks.Platforms.Where(HasUpload).DefaultIfEmpty("(anderswo)"));
 
     /// <summary>Tick "hochgeladen" by hand (after uploading in the browser); upload by account sets it by itself.</summary>
     public bool UploadedTikTok { get => HasUpload("TikTok"); set => MarkUploaded("TikTok", value); }
     public bool UploadedYouTube { get => HasUpload("YouTube"); set => MarkUploaded("YouTube", value); }
     public bool UploadedInstagram { get => HasUpload("Instagram"); set => MarkUploaded("Instagram", value); }
 
-    private bool HasUpload(string platform) => Clip.Metadata.Uploaded.Keys.Any(k => k.StartsWith(platform, StringComparison.OrdinalIgnoreCase));
+    private bool HasUpload(string platform) => UploadMarks.Has(Clip.Metadata, platform);
 
     private void MarkUploaded(string platform, bool on)
     {
-        if (on == HasUpload(platform))
+        if (!UploadMarks.Set(Clip.Metadata, platform, on, DateTime.Now))
         {
             return;
-        }
-
-        if (on)
-        {
-            Clip.Metadata.Uploaded[$"{platform}: von Hand"] = "hochgeladen am " + DateTime.Now.ToString("dd.MM.yyyy HH:mm", System.Globalization.CultureInfo.GetCultureInfo("de-DE"));
-        }
-        else
-        {
-            foreach (var k in Clip.Metadata.Uploaded.Keys.Where(k => k.StartsWith(platform, StringComparison.OrdinalIgnoreCase)).ToList())
-            {
-                Clip.Metadata.Uploaded.Remove(k);
-            }
         }
 
         try

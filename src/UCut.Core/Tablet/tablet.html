@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0e12">
+<title>UCut</title>
+<style>
+  :root {
+    --bg: #0d0e12; --side: #121318; --surface: #191a21; --surface2: #22242d; --line: #2e303b;
+    --text: #f2f3f5; --subtle: #9a9dab; --accent: #ff5a2e; --ok: #22c55e; --fun: #facc15; --danger: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { background: var(--surface2); border: 0; border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+  button:active { filter: brightness(1.3); }
+  button.primary { background: var(--accent); color: #fff; font-weight: 600; }
+  button.ghost { background: transparent; color: var(--subtle); }
+  input[type=text], input[type=search], input[type=password], select, textarea {
+    background: var(--surface2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%;
+  }
+  textarea { resize: vertical; min-height: 84px; }
+  label.check { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+  label.check input { width: 22px; height: 22px; accent-color: var(--ok); }
+  .hidden { display: none !important; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--side); border-bottom: 1px solid var(--line); padding: 10px 16px; }
+  .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .logo { font-weight: 800; font-size: 20px; }
+  .logo span { color: var(--accent); }
+  .pc { color: var(--subtle); font-size: 13px; }
+  .grow { flex: 1; }
+  .filters { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .filters label.check { padding: 0; font-size: 14px; }
+  main { padding: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+  .card { background: var(--surface); border-radius: 12px; overflow: hidden; cursor: pointer; }
+  .thumb { position: relative; aspect-ratio: 9/16; background: #08090c; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .chip { position: absolute; background: rgba(0,0,0,.65); border-radius: 8px; padding: 2px 7px; font-size: 12px; font-weight: 600; }
+  .chip.fun { top: 8px; left: 8px; color: var(--fun); }
+  .chip.dur { bottom: 8px; right: 8px; }
+  .tick { position: absolute; bottom: 8px; left: 8px; width: 26px; height: 26px; border-radius: 50%; background: var(--ok); display: grid; place-items: center; font-weight: 800; }
+  .meta { padding: 8px 10px 10px; }
+  .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub { color: var(--subtle); font-size: 12px; }
+  .empty { color: var(--subtle); text-align: center; padding: 40px 10px; }
+  .detail { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 760px) { .detail { grid-template-columns: 1fr; } .filters { grid-template-columns: 1fr 1fr; } }
+  video { width: 100%; max-height: 70vh; background: #000; border-radius: 12px; display: block; }
+  .section { background: var(--surface); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  .section h2 { margin: 0 0 10px; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+  .section h2 .done { color: var(--ok); font-size: 13px; font-weight: 600; }
+  .field { color: var(--subtle); font-size: 13px; margin: 8px 0 4px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .login { max-width: 380px; margin: 12vh auto 0; text-align: center; padding: 0 16px; }
+  .login input { text-align: center; font-size: 28px; letter-spacing: 8px; margin: 16px 0; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 12px; max-width: 90vw; z-index: 20; }
+  .hint { color: var(--subtle); font-size: 13px; }
+  .back { margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div id="login" class="login hidden">
+  <div class="logo">U<span>Cut</span></div>
+  <p>Gib den Code ein, der am PC in UCut unter <b>Einstellungen → Tablet-App</b> steht.</p>
+  <input id="code" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="000000">
+  <button class="primary" id="loginBtn" style="width:100%">Verbinden</button>
+  <p id="loginErr" class="hint"></p>
+  <button class="ghost appOnly" onclick="UCutApp.changePc()">Anderen PC wählen</button>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <div class="bar">
+      <div class="logo">U<span>Cut</span></div>
+      <div class="pc" id="pcName"></div>
+      <div class="grow"></div>
+      <button class="ghost" onclick="load()" title="Neu laden">⟳</button>
+      <button class="ghost appOnly" onclick="UCutApp.changePc()">PC wechseln</button>
+    </div>
+    <div class="filters" id="filters">
+      <input type="search" id="search" placeholder="Suchen …">
+      <select id="game"></select>
+      <select id="sort">
+        <option value="new">Neueste zuerst</option>
+        <option value="funny">Lustigste zuerst</option>
+        <option value="score">Beste Bewertung</option>
+      </select>
+      <label class="check"><input type="checkbox" id="notUploaded"> Nur noch nicht hochgeladene</label>
+    </div>
+  </header>
+  <main>
+    <div id="list"></div>
+    <div id="clip" class="hidden"></div>
+  </main>
+</div>
+<div id="toast" class="toast hidden"></div>
+
+<script>
+"use strict";
+const inApp = typeof window.UCutApp !== "undefined";
+let clips = [];
+let pc = "";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+document.querySelectorAll(".appOnly").forEach(e => { if (!inApp) e.classList.add("hidden"); });
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.remove("hidden");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.add("hidden"), 3500);
+}
+
+async function api(path, options) {
+  const r = await fetch(path, Object.assign({ credentials: "same-origin" }, options || {}));
+  if (r.status === 401) { showLogin(); throw new Error("login"); }
+  if (!r.ok) throw new Error("Fehler " + r.status);
+  return r.status === 204 ? null : r.json();
+}
+
+function showLogin() {
+  $("app").classList.add("hidden");
+  $("login").classList.remove("hidden");
+  setTimeout(() => $("code").focus(), 50);
+}
+
+$("loginBtn").onclick = async () => {
+  const code = $("code").value.trim();
+  const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+  if (r.ok) { $("login").classList.add("hidden"); start(); }
+  else $("loginErr").textContent = "Der Code stimmt nicht. Schau am PC unter Einstellungen → Tablet-App.";
+};
+$("code").addEventListener("keydown", e => { if (e.key === "Enter") $("loginBtn").click(); });
+
+async function start() {
+  const hello = await (await fetch("/api/hello" + location.search)).json();
+  pc = hello.pc;
+  if (!hello.loggedIn) { showLogin(); return; }
+  if (location.search) history.replaceState(null, "", "/" + location.hash);
+  $("pcName").textContent = "PC: " + pc + " · UCut " + hello.version;
+  $("app").classList.remove("hidden");
+  await load();
+}
+
+async function load() {
+  try {
+    clips = await api("/api/clips");
+  } catch (e) {
+    if (e.message !== "login") toast("PC nicht erreichbar. Läuft UCut am PC?");
+    return;
+  }
+  const games = [...new Set(clips.map(c => c.game).filter(g => g))].sort();
+  const sel = $("game"), cur = sel.value;
+  sel.innerHTML = '<option value="">Alle Spiele</option>' + games.map(g => `<option>${esc(g)}</option>`).join("");
+  sel.value = games.includes(cur) ? cur : "";
+  route();
+}
+
+["search", "game", "sort", "notUploaded"].forEach(id => $(id).addEventListener("input", renderList));
+
+function renderList() {
+  const q = $("search").value.toLowerCase(), g = $("game").value, only = $("notUploaded").checked, sort = $("sort").value;
+  let shown = clips.filter(c => (!g || c.game === g) && (!only || c.uploaded.length === 0)
+    && (!q || (c.title + " " + c.tikTokCaption + " " + c.game).toLowerCase().includes(q)));
+  if (sort === "funny") shown.sort((a, b) => (b.funny ?? -1) - (a.funny ?? -1));
+  else if (sort === "score") shown.sort((a, b) => b.score - a.score);
+  else shown.sort((a, b) => new Date(b.date) - new Date(a.date));
+  $("list").innerHTML = shown.length === 0
+    ? '<div class="empty">Keine Clips gefunden.</div>'
+    : '<div class="grid">' + shown.map(c => `
+      <div class="card" onclick="location.hash='clip/${c.id}'">
+        <div class="thumb">
+          <img loading="lazy" src="/api/clips/${c.id}/thumb" alt="">
+          ${c.funny != null ? `<span class="chip fun">😂 ${c.funny}/10</span>` : ""}
+          <span class="chip dur">${dur(c.duration)}</span>
+          ${c.uploaded.length ? `<span class="tick" title="Hochgeladen: ${esc(c.uploaded.join(", "))}">✓</span>` : ""}
+        </div>
+        <div class="meta"><div class="title">${esc(c.title)}</div><div class="sub">${esc(c.game)} · ${date(c.date)}</div></div>
+      </div>`).join("") + "</div>";
+}
+
+const dur = s => Math.floor(s / 60) + ":" + String(Math.round(s % 60)).padStart(2, "0");
+const date = d => new Date(d).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+window.addEventListener("hashchange", route);
+function route() {
+  const m = location.hash.match(/^#clip\/(\w+)/);
+  const c = m && clips.find(x => x.id === m[1]);
+  $("filters").classList.toggle("hidden", !!c);
+  $("list").classList.toggle("hidden", !!c);
+  $("clip").classList.toggle("hidden", !c);
+  if (c) renderClip(c); else { $("clip").innerHTML = ""; renderList(); }
+}
+
+const platforms = [
+  { key: "TikTok", name: "TikTok", text: c => c.tikTokCaption, file: c => c.tikTokCaption },
+  { key: "YouTube", name: "YouTube Shorts", text: c => `${c.youTubeDescription}\n\n${c.youTubeTags}`.trim(), file: c => c.youTubeTitle },
+  { key: "Instagram", name: "Instagram Reels", text: c => c.instagramCaption, file: c => c.title },
+];
+
+function renderClip(c) {
+  const done = p => c.uploaded.includes(p);
+  $("clip").innerHTML = `
+    <button class="back" onclick="history.length > 1 ? history.back() : (location.hash = '')">← Alle Clips</button>
+    <div class="detail">
+      <div>
+        <video src="/api/clips/${c.id}/video" controls playsinline preload="metadata" poster="/api/clips/${c.id}/thumb"></video>
+        <div class="section" style="margin-top:14px">
+          <div class="title" style="white-space:normal">${esc(c.title)}</div>
+          <div class="sub">${esc(c.game)} · ${date(c.date)} · ${dur(c.duration)}${c.funny != null ? " · 😂 " + c.funny + "/10" : ""}</div>
+          ${c.funnyReason ? `<div class="hint" style="margin-top:6px">${esc(c.funnyReason)}</div>` : ""}
+        </div>
+      </div>
+      <div>
+        ${platforms.map(p => `
+        <div class="section">
+          <h2>${p.name} ${done(p.key) ? '<span class="done">✓ hochgeladen</span>' : ""}</h2>
+          ${p.key === "TikTok" ? `<textarea data-f="tikTokCaption">${esc(c.tikTokCaption)}</textarea>` : ""}
+          ${p.key === "YouTube" ? `
+            <div class="field">Titel</div><input type="text" data-f="youTubeTitle" value="${esc(c.youTubeTitle)}">
+            <div class="field">Beschreibung</div><textarea data-f="youTubeDescription">${esc(c.youTubeDescription)}</textarea>
+            <div class="field">Tags</div><input type="text" data-f="youTubeTags" value="${esc(c.youTubeTags)}">` : ""}
+          ${p.key === "Instagram" ? `<textarea data-f="instagramCaption">${esc(c.instagramCaption)}</textarea>` : ""}
+          <div class="actions">
+            <button class="primary" onclick="share('${c.id}','${p.key}')">${inApp ? "An " + p.name.split(" ")[0] + "-App schicken" : "Video speichern"}</button>
+            <button onclick="copyText('${c.id}','${p.key}')">Text kopieren</button>
+          </div>
+          <label class="check"><input type="checkbox" ${done(p.key) ? "checked" : ""} onchange="mark('${c.id}','${p.key}',this.checked)"> Hochgeladen</label>
+        </div>`).join("")}
+        <div class="hint">Änderungen an den Texten werden automatisch am PC gespeichert.</div>
+      </div>
+    </div>`;
+  $("clip").querySelectorAll("[data-f]").forEach(el => el.addEventListener("change", () => saveTexts(c.id)));
+  window.scrollTo(0, 0);
+}
+
+async function saveTexts(id) {
+  const body = {};
+  $("clip").querySelectorAll("[data-f]").forEach(el => body[el.dataset.f] = el.value);
+  try {
+    const updated = await api(`/api/clips/${id}/texts`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    replace(updated);
+    toast("Gespeichert");
+  } catch (e) { if (e.message !== "login") toast("Speichern ging nicht: " + e.message); }
+}
+
+async function mark(id, platform, on) {
+  try {
+    replace(await api(`/api/clips/${id}/uploaded`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ platform, on }) }));
+    route();
+  } catch (e) { if (e.message !== "login") toast("Ging nicht: " + e.message); }
+}
+
+function replace(c) { const i = clips.findIndex(x => x.id === c.id); if (i >= 0) clips[i] = c; }
+
+async function flushTexts(id) {
+  // Typed but not left the field yet: save first, so the shared text is the newest.
+  const changed = [...$("clip").querySelectorAll("[data-f]")].some(el => {
+    const c = clips.find(x => x.id === id);
+    return c && el.value !== c[el.dataset.f];
+  });
+  if (changed) await saveTexts(id);
+}
+
+async function copyText(id, key) {
+  await flushTexts(id);
+  const c = clips.find(x => x.id === id), p = platforms.find(x => x.key === key);
+  copy(p.text(c));
+  toast("Text kopiert. Im Beschreibungsfeld lange drücken → Einfügen.");
+}
+
+function copy(text) {
+  if (inApp) { UCutApp.copy(text); return; }
+  const t = document.createElement("textarea");
+  t.value = text; document.body.appendChild(t); t.select();
+  try { document.execCommand("copy"); } catch (e) { }
+  t.remove();
+}
+
+// Same look-alike characters as on the PC: platforms take the file name as text.
+const lookAlikes = { ":": "꞉", "?": "？", '"': "＂", "/": "∕", "\\": "⧵", "*": "∗", "<": "‹", ">": "›", "|": "∣" };
+function fileName(text) {
+  let n = [...String(text)].map(ch => lookAlikes[ch] ?? (ch < " " ? " " : ch)).join("").split(" ").filter(x => x).join(" ");
+  if (n.length > 150) { const cut = n.lastIndexOf(" ", 150); n = n.slice(0, cut > 75 ? cut : 150); }
+  n = n.replace(/[. ]+$/, "");
+  return (n || "clip") + ".mp4";
+}
+
+async function share(id, key) {
+  await flushTexts(id);
+  const c = clips.find(x => x.id === id), p = platforms.find(x => x.key === key);
+  const url = location.origin + `/api/clips/${id}/video`;
+  if (inApp) {
+    UCutApp.share(url, fileName(p.file(c)), p.text(c), key);
+    return;
+  }
+  copy(p.text(c));
+  const a = document.createElement("a");
+  a.href = url; a.download = fileName(p.file(c));
+  document.body.appendChild(a); a.click(); a.remove();
+  toast("Video wird gespeichert, der Text ist kopiert.");
+}
+
+// Called by the app after sharing.
+window.ucutShared = (id, key) => toast("Wenn das Video online ist: Haken bei „Hochgeladen“ setzen.");
+
+start().catch(() => toast("PC nicht erreichbar. Läuft UCut am PC?"));
+</script>
+</body>
+</html>

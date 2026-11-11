@@ -27,6 +27,7 @@ public sealed class UCutSettings
     public WriterSettings Writer { get; set; } = new();
     public TwitchClipSettings TwitchClips { get; set; } = new();
     public UploadSettings Upload { get; set; } = new();
+    public TabletSettings Tablet { get; set; } = new();
 
     internal static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -288,4 +289,14 @@ public sealed class UploadSettings
     public string InstagramRedirectUri { get; set; } = "https://localhost/";
 
     public string GraphApiVersion { get; set; } = "v24.0";
+}
+
+/// <summary>The tablet companion app: UCut shares the clips in the home network (WLAN), protected by a code.</summary>
+public sealed class TabletSettings
+{
+    public bool Enabled { get; set; }
+    public int Port { get; set; } = 53790;
+
+    /// <summary>Six digits the tablet has to type in once. Made when the tablet connection is switched on.</summary>
+    public string Code { get; set; } = "";
 }

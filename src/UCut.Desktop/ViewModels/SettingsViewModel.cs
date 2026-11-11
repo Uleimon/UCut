@@ -21,6 +21,21 @@ internal sealed class SettingsViewModel : ObservableObject
         _main = main;
         Load();
         SaveCommand = new RelayCommand(_ => Save());
+        NewTabletCodeCommand = new RelayCommand(_ =>
+        {
+            _s.Tablet.Code = UCut.Tablet.TabletServer.NewCode();
+            if (Save())
+            {
+                _main.Dialogs.Info("Tablet-App", $"Neuer Code: {_s.Tablet.Code}\n\nDas Tablet muss den neuen Code einmal eingeben. Mit dem alten Code kommt niemand mehr rein.");
+            }
+        });
+        _main.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.TabletStatus))
+            {
+                OnPropertyChanged(nameof(TabletStatus));
+            }
+        };
         ConnectCommand = new AsyncCommand(async p =>
         {
             if (p is not string name || !Enum.TryParse<UploadPlatform>(name, out var platform) || !Save())
@@ -68,6 +83,7 @@ internal sealed class SettingsViewModel : ObservableObject
     }
 
     public RelayCommand SaveCommand { get; }
+    public RelayCommand NewTabletCodeCommand { get; }
     public AsyncCommand ConnectCommand { get; }
     public RelayCommand RemoveAccountCommand { get; }
     public RelayCommand DevConsoleCommand { get; }
@@ -128,6 +144,9 @@ internal sealed class SettingsViewModel : ObservableObject
     public string ClaudeKey { get => _claudeKey; set => Set(ref _claudeKey, value.Trim()); }
     public bool UseClaude { get => _s.Writer.UseClaude; set { _s.Writer.UseClaude = value; OnPropertyChanged(); } }
     public bool TrendHashtags { get => _s.Writer.TrendHashtags; set { _s.Writer.TrendHashtags = value; OnPropertyChanged(); } }
+    public bool TabletEnabled { get => _s.Tablet.Enabled; set { _s.Tablet.Enabled = value; OnPropertyChanged(); } }
+    public int TabletPort { get => _s.Tablet.Port; set { _s.Tablet.Port = Math.Clamp(value, 1024, 65535); OnPropertyChanged(); } }
+    public string TabletStatus => _main.TabletStatus;
     public bool ShowUploadHint { get => _s.Upload.ShowUploadHint; set { _s.Upload.ShowUploadHint = value; OnPropertyChanged(); } }
     public bool YouTubeThumbnail { get => _s.Writer.YouTubeThumbnail; set { _s.Writer.YouTubeThumbnail = value; OnPropertyChanged(); } }
     public string ChannelName { get => _s.Writer.ChannelName; set { _s.Writer.ChannelName = value; OnPropertyChanged(); } }
