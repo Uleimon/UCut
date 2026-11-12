@@ -109,7 +109,7 @@ internal static class HttpJson
 
         try
         {
-            return body.Length == 0 ? default : JsonDocument.Parse(body).RootElement.Clone();
+            return body.Length == 0 ? default : JsonElement.Parse(body);
         }
         catch (JsonException)
         {
