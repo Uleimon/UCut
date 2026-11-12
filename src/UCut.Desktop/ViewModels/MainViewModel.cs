@@ -10,6 +10,8 @@ namespace UCut.Desktop.ViewModels;
 internal sealed class MainViewModel : ObservableObject, IDisposable
 {
     private readonly Dispatcher _ui;
+    private DateTime _lastLibraryRefresh;
+    private bool _libraryRefreshQueued;
     private string _page = "library";
     private CancellationTokenSource? _jobCts;
     private CancellationTokenSource? _watchCts;
@@ -196,8 +198,36 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
     private UCutEngine CreateEngine(UCutSettings settings)
     {
         var engine = new UCutEngine(settings, Log);
-        engine.ClipFinished += r => _ = _ui.BeginInvoke(() => Library?.Refresh());
+        engine.ClipFinished += r => _ = _ui.BeginInvoke(QueueLibraryRefresh);
         return engine;
+    }
+
+    /// <summary>
+    /// Refreshes the gallery after a finished clip, but at most every 20 seconds: with a thousand clips in a row,
+    /// rebuilding the whole gallery after each one made UCut slower and slower.
+    /// </summary>
+    public void QueueLibraryRefresh()
+    {
+        if (_libraryRefreshQueued)
+        {
+            return;
+        }
+
+        var wait = TimeSpan.FromSeconds(20) - (DateTime.UtcNow - _lastLibraryRefresh);
+        if (wait <= TimeSpan.Zero)
+        {
+            _lastLibraryRefresh = DateTime.UtcNow;
+            Library?.Refresh();
+            return;
+        }
+
+        _libraryRefreshQueued = true;
+        _ = Task.Delay(wait).ContinueWith(_ => _ui.BeginInvoke(() =>
+        {
+            _libraryRefreshQueued = false;
+            _lastLibraryRefresh = DateTime.UtcNow;
+            Library?.Refresh();
+        }), TaskScheduler.Default);
     }
 
     /// <summary>After the settings were saved: new engine with the new values.</summary>

@@ -3,13 +3,28 @@ using UCut.Twitch;
 
 namespace UCut.Desktop.ViewModels;
 
-internal sealed class TwitchItem(ClipCandidate candidate) : ObservableObject
+internal sealed class TwitchItem(ClipCandidate candidate, Action? selectionChanged = null) : ObservableObject
 {
     private bool _selected = true;
 
     public TwitchClip Clip => candidate.Clip;
-    public bool Selected { get => _selected; set => Set(ref _selected, value); }
+
+    public bool Selected
+    {
+        get => _selected;
+        set
+        {
+            if (Set(ref _selected, value))
+            {
+                selectionChanged?.Invoke();
+            }
+        }
+    }
+
     public string Title => Clip.Title;
+
+    /// <summary>For "Alle"/"Keine": no per-item notification to the list owner (it counts once afterwards).</summary>
+    public void SetSelectedQuietly(bool value) => Set(ref _selected, value, nameof(Selected));
     public string Thumbnail => Clip.ThumbnailUrl;
     public string DateText => Clip.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy", System.Globalization.CultureInfo.InvariantCulture);
     public string Views => $"{Clip.ViewCount:N0} Aufrufe";
@@ -32,6 +47,11 @@ internal sealed class TwitchViewModel : ObservableObject
     private Uri? _previewUri;
     private string _previewStatus = "";
     private CancellationTokenSource? _previewCts;
+    private List<TwitchItem> _all = [];
+    private int _shown;
+
+    /// <summary>Cards drawn at once; more come with "Mehr anzeigen" (a thousand cards with pictures made UCut crash).</summary>
+    public const int PageSize = 100;
 
     public TwitchViewModel(MainViewModel main)
     {
@@ -42,8 +62,17 @@ internal sealed class TwitchViewModel : ObservableObject
         }
 
         SearchCommand = new AsyncCommand(SearchAsync, () => !_searching && !_main.JobRunning);
-        LoadCommand = new AsyncCommand(LoadAsync, () => Items.Any(i => i.Selected) && !_main.JobRunning);
-        SelectAllCommand = new RelayCommand(p => { foreach (var i in Items) { i.Selected = p is "true"; } });
+        LoadCommand = new AsyncCommand(LoadAsync, () => _all.Any(i => i.Selected) && !_main.JobRunning);
+        SelectAllCommand = new RelayCommand(p =>
+        {
+            foreach (var i in _all)
+            {
+                i.SetSelectedQuietly(p is "true");
+            }
+
+            OnPropertyChanged(nameof(SelectedText));
+        });
+        ShowMoreCommand = new RelayCommand(_ => ShowMore());
         OpenClipCommand = new RelayCommand(p => { if (p is TwitchItem t) { Shell.Open(t.Clip.Url); } });
         OpenSettingsCommand = new RelayCommand(_ => _main.Page = "settings");
         OpenDevConsoleCommand = new RelayCommand(_ => Shell.Open("https://dev.twitch.tv/console/apps"));
@@ -53,6 +82,11 @@ internal sealed class TwitchViewModel : ObservableObject
     public AsyncCommand SearchCommand { get; }
     public AsyncCommand LoadCommand { get; }
     public RelayCommand SelectAllCommand { get; }
+    public RelayCommand ShowMoreCommand { get; }
+
+    public bool HasMore => _shown < _all.Count;
+    public string MoreText => $"Mehr anzeigen ({_all.Count - _shown} weitere)";
+    public string SelectedText => _all.Count == 0 ? "" : $"{_all.Count(i => i.Selected)} von {_all.Count} ausgewählt · ";
     public RelayCommand OpenClipCommand { get; }
     public RelayCommand OpenSettingsCommand { get; }
     public RelayCommand OpenDevConsoleCommand { get; }
@@ -101,11 +135,7 @@ internal sealed class TwitchViewModel : ObservableObject
             var to = new DateTimeOffset(To.Date.AddDays(1));
             var r = await Task.Run(() => engine.SearchTwitchAsync(from, to, OnlyFunny, 0));
             Current = null;
-            Items.Clear();
-            foreach (var c in r.Candidates)
-            {
-                Items.Add(new TwitchItem(c));
-            }
+            SetAll(r.Candidates.Select(c => new TwitchItem(c, () => OnPropertyChanged(nameof(SelectedText)))).ToList());
 
             Summary = $"{r.Found} Clips gefunden, {r.Candidates.Count} {(OnlyFunny ? "sehen lustig aus" : "neu")}, {r.AlreadyLoaded} schon geladen.";
         }
@@ -164,20 +194,18 @@ internal sealed class TwitchViewModel : ObservableObject
 
     private async Task LoadAsync()
     {
-        var chosen = Items.Where(i => i.Selected).ToList();
+        var chosen = _all.Where(i => i.Selected).ToList();
         var engine = _main.Engine;
         await _main.RunJobAsync($"{chosen.Count} Twitch-Clip(s) werden geladen", (progress, ct) =>
             engine.ProcessTwitchAsync(chosen.Select(c => c.Clip).ToList(), progress, ct), r =>
         {
-            foreach (var c in chosen)
-            {
-                Items.Remove(c);
-            }
-
-            if (Current is not null && !Items.Contains(Current))
+            if (Current is not null && chosen.Contains(Current))
             {
                 Current = null;
             }
+
+            var left = new HashSet<TwitchItem>(chosen);
+            SetAll(_all.Where(i => !left.Contains(i)).ToList());
 
             if (ShutdownAfter && !r.Cancelled)
             {
@@ -189,5 +217,26 @@ internal sealed class TwitchViewModel : ObservableObject
                 _main.Page = "library";
             }
         });
+    }
+
+    private void SetAll(List<TwitchItem> items)
+    {
+        _all = items;
+        _shown = 0;
+        Items.Clear();
+        ShowMore();
+        OnPropertyChanged(nameof(SelectedText));
+    }
+
+    private void ShowMore()
+    {
+        foreach (var i in _all.Skip(_shown).Take(PageSize))
+        {
+            Items.Add(i);
+        }
+
+        _shown = Math.Min(_all.Count, _shown + PageSize);
+        OnPropertyChanged(nameof(HasMore));
+        OnPropertyChanged(nameof(MoreText));
     }
 }

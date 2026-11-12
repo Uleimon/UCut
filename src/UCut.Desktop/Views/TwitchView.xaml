@@ -53,7 +53,7 @@
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Alle" Command="{Binding SelectAllCommand}" CommandParameter="true"/>
                     <Button Content="Keine" Command="{Binding SelectAllCommand}" CommandParameter="false"/>
-                    <TextBlock Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="8,0,0,0" Text="Der PC bleibt wach, solange UCut arbeitet."/>
+                    <TextBlock Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="8,0,0,0" Text="{Binding SelectedText, StringFormat='{}{0}Der PC bleibt wach, solange UCut arbeitet.'}"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -63,6 +63,10 @@
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
+        <DockPanel>
+        <Button DockPanel.Dock="Bottom" HorizontalAlignment="Center" Margin="0,8,0,0" Content="{Binding MoreText}" Command="{Binding ShowMoreCommand}"
+                Visibility="{Binding HasMore, Converter={StaticResource BoolToVis}}"
+                ToolTip="Es werden immer 100 Clips auf einmal gezeigt. Geladen werden trotzdem alle ausgewählten, auch die noch nicht gezeigten."/>
         <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding Current}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemsPanel>
                 <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
@@ -116,6 +120,7 @@
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
+        </DockPanel>
 
         <!-- Preview -->
         <Border Grid.Column="1" Width="380" Margin="12,0,0,0" CornerRadius="12" Background="{StaticResource SidebarBrush}"

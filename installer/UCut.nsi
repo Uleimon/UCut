@@ -4,7 +4,7 @@ Unicode true
 !include "MUI2.nsh"
 
 !ifndef VERSION
-  !define VERSION "0.6.2"
+  !define VERSION "0.6.3"
 !endif
 !ifndef SOURCE
   !define SOURCE "..\publish\UCut"

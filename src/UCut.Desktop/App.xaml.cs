@@ -25,9 +25,11 @@ public partial class App : Application
                 return;
             }
 
+            WriteCrash(args.Exception);
             if (_showingError)
             {
-                args.Handled = false;
+                // A second error while the first one is still on screen used to close UCut; keep running instead.
+                args.Handled = true;
                 return;
             }
 
@@ -35,6 +37,14 @@ public partial class App : Application
             MessageBox.Show(args.Exception.ToString(), "UCut – unerwarteter Fehler", MessageBoxButton.OK, MessageBoxImage.Error);
             _showingError = false;
             args.Handled = true;
+        };
+
+        // Errors on background threads end the program without any message; at least leave a note behind.
+        AppDomain.CurrentDomain.UnhandledException += (_, args) => WriteCrash(args.ExceptionObject);
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            WriteCrash(args.Exception);
+            args.SetObserved();
         };
 
         // Self-test runs against its own settings in a temp folder, so CI never touches real data.
@@ -65,6 +75,25 @@ public partial class App : Application
         if (_selfTest)
         {
             _ = RunSelfTestAsync(window, _main);
+        }
+    }
+
+    /// <summary>%APPDATA%\\UCut\\Absturz.txt: what went wrong, so it can be sent along.</summary>
+    public static readonly string CrashFile =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UCut", "Absturz.txt");
+
+    private static void WriteCrash(object error)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(CrashFile)!);
+            File.AppendAllText(CrashFile, $"[{DateTime.Now:dd.MM.yyyy HH:mm:ss}] UCut {typeof(App).Assembly.GetName().Version}{Environment.NewLine}{error}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 

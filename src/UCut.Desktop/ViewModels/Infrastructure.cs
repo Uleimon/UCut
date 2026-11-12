@@ -118,11 +118,21 @@ internal sealed class WpfDialogs : IDialogs
         {
             Title = title, Content = panel, SizeToContent = System.Windows.SizeToContent.WidthAndHeight, ResizeMode = System.Windows.ResizeMode.NoResize,
             WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner, Owner = System.Windows.Application.Current?.MainWindow,
+            Background = Brush("WindowBrush"), Foreground = Brush("TextBrush"),
         };
+        if (System.Windows.Application.Current?.TryFindResource("Primary") is System.Windows.Style primary)
+        {
+            ok.Style = primary;
+        }
+
         ok.Click += (_, _) => window.Close();
         window.ShowDialog();
         return never.IsChecked == true ? HintAnswer.HideForever : session.IsChecked == true ? HintAnswer.HideThisSession : HintAnswer.Ok;
     }
+
+    // The app's styles make text light for the dark theme, so the dialogs need the dark window colour too (white made the text unreadable).
+    private static System.Windows.Media.Brush? Brush(string key) =>
+        System.Windows.Application.Current?.TryFindResource(key) as System.Windows.Media.Brush;
 
     public const string VideoFilter = "Videos|*.mp4;*.mkv;*.mov|Alle Dateien|*.*";
     public const string AudioFilter = "Audio|*.mp3;*.wav;*.m4a;*.aac;*.ogg;*.flac|Alle Dateien|*.*";
@@ -163,6 +173,7 @@ internal sealed class WpfDialogs : IDialogs
         {
             Title = title, Content = panel, SizeToContent = System.Windows.SizeToContent.WidthAndHeight, ResizeMode = System.Windows.ResizeMode.NoResize,
             WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner, Owner = System.Windows.Application.Current?.MainWindow,
+            Background = Brush("WindowBrush"), Foreground = Brush("TextBrush"),
         };
         ok.Click += (_, _) => window.DialogResult = true;
         box.Loaded += (_, _) => box.Focus();
