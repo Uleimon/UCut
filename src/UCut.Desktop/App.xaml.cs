@@ -1,0 +1,243 @@
+using System.IO;
+using System.Windows;
+using UCut.Desktop.ViewModels;
+using UCut.Settings;
+
+namespace UCut.Desktop;
+
+public partial class App : Application
+{
+    private MainViewModel? _main;
+    private bool _showingError;
+    private bool _selfTest;
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+        if (e.Args.Length > 0 && e.Args[0] == UCut.Transcription.WhisperWorker.Argument)
+        {
+            // Started by UCut itself for one clip's subtitles: no window, just the work.
+            int code;
+            try
+            {
+                code = UCut.Transcription.WhisperWorker.Run(e.Args);
+            }
+            catch (Exception ex)
+            {
+                WriteCrash(ex);
+                code = 1;
+            }
+
+            Shutdown(code);
+            return;
+        }
+
+        UCut.Transcription.WhisperWorker.ExecutablePath = Environment.ProcessPath;
+        _selfTest = e.Args.Contains("--ui-selftest");
+        DispatcherUnhandledException += (_, args) =>
+        {
+            if (_selfTest)
+            {
+                Console.Error.WriteLine(args.Exception);
+                args.Handled = true;
+                Shutdown(3);
+                return;
+            }
+
+            WriteCrash(args.Exception);
+            if (_showingError)
+            {
+                // A second error while the first one is still on screen used to close UCut; keep running instead.
+                args.Handled = true;
+                return;
+            }
+
+            _showingError = true;
+            MessageBox.Show(args.Exception.ToString(), "UCut – unerwarteter Fehler", MessageBoxButton.OK, MessageBoxImage.Error);
+            _showingError = false;
+            args.Handled = true;
+        };
+
+        // Errors on background threads end the program without any message; at least leave a note behind.
+        AppDomain.CurrentDomain.UnhandledException += (_, args) => WriteCrash(args.ExceptionObject);
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            WriteCrash(args.Exception);
+            args.SetObserved();
+        };
+
+        // Self-test runs against its own settings in a temp folder, so CI never touches real data.
+        var settingsPath = SettingsStore.DefaultPath;
+        if (_selfTest)
+        {
+            var dir = Directory.CreateTempSubdirectory("ucut-selftest-").FullName;
+            settingsPath = Path.Combine(dir, "settings.json");
+            var s = UCut.App.UCutEngine.DefaultSettings();
+            s.OutputFolder = Path.Combine(dir, "out");
+            s.WatchFolder = Path.Combine(dir, "watch");
+            SettingsStore.Save(s, settingsPath);
+        }
+
+        _main = new MainViewModel(settingsPath, new WpfDialogs(), Dispatcher) { AutoInstallTools = !_selfTest };
+        var window = new MainWindow { DataContext = _main };
+        window.Closing += (_, _) => StopMedia(window);
+        window.Show();
+        _main.Library.Refresh();
+        _ = _main.CheckToolsAsync();
+
+        // Videos dropped onto UCut.exe (or "Öffnen mit") land in the queue.
+        var files = e.Args.Where(a => !a.StartsWith("--", StringComparison.Ordinal) && (File.Exists(a) || Directory.Exists(a))).ToList();
+        if (files.Count > 0)
+        {
+            _main.AddFiles(files);
+        }
+
+        if (_selfTest)
+        {
+            _ = RunSelfTestAsync(window, _main);
+        }
+    }
+
+    /// <summary>%APPDATA%\\UCut\\Absturz.txt: what went wrong, so it can be sent along.</summary>
+    public static readonly string CrashFile =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UCut", "Absturz.txt");
+
+    private static void WriteCrash(object error)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(CrashFile)!);
+            File.AppendAllText(CrashFile, $"[{DateTime.Now:dd.MM.yyyy HH:mm:ss}] UCut {typeof(App).Assembly.GetName().Version}{Environment.NewLine}{error}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    /// <summary>For CI: shows every page once (forcing layout and bindings) and exits with 0; any exception gives code 3.</summary>
+    private async Task RunSelfTestAsync(Window window, MainViewModel main)
+    {
+        try
+        {
+            foreach (var page in new[] { "library", "cutroom", "import", "twitch", "settings", "log", "library" })
+            {
+                main.Page = page;
+                window.UpdateLayout();
+                await Task.Delay(700);
+                Console.Out.WriteLine($"page ok: {page}");
+            }
+
+            var video = Environment.GetEnvironmentVariable("UCUT_SELFTEST_VIDEO");
+            if (!string.IsNullOrEmpty(video) && File.Exists(video))
+            {
+                await main.CutRoom.OpenAsync(video);
+                window.UpdateLayout();
+                main.CutRoom.SplitCommand.Execute(null);
+                main.CutRoom.ClickTimeline(10, true);
+                main.CutRoom.UndoCommand.Execute(null);
+                main.CutRoom.AddZoomCommand.Execute(null);
+                main.CutRoom.AddFlashCommand.Execute(null);
+                main.CutRoom.SelectedEffect!.Size = 0.4;
+                main.CutRoom.DeleteEffectCommand.Execute(null);
+                main.CutRoom.UndoCommand.Execute(null);
+                window.UpdateLayout();
+                await Task.Delay(1500);
+                Console.Out.WriteLine($"effects ok: {main.CutRoom.EffectRows.Count} effect(s), {main.CutRoom.Library.Count} meme file(s)");
+                Console.Out.WriteLine($"cutroom ok: {main.CutRoom.Segments.Count} segment(s), {main.CutRoom.Tracks.Count} track(s)");
+
+                main.AddFiles([video]);
+                window.UpdateLayout();
+                await Task.Delay(500);
+                Console.Out.WriteLine($"import ok: {main.Import.Items.Count} item(s)");
+
+                // A finished clip in the gallery: details with upload box, then the "Create" dialog with a cam drawn.
+                var gameDir = Path.Combine(main.Engine.Settings.OutputFolder, "Test");
+                Directory.CreateDirectory(gameDir);
+                var clipPath = Path.Combine(gameDir, "2026-01-01_120000_selbsttest.mp4");
+                File.Copy(video, clipPath, overwrite: true);
+                var meta = new UCut.Metadata.ClipMetadata
+                {
+                    Video = Path.GetFileName(clipPath), SourceFile = video, Game = "Test", CreatedAt = DateTimeOffset.Now, DurationSeconds = 4,
+                    Edit = new UCut.Metadata.EditInfo { CutStart = 0, CutEnd = 4, Mode = "Crop", Words = [new() { Text = "Hallo", Start = 0.2, End = 0.6 }] },
+                };
+                meta.YouTube.Title = "Selbsttest";
+                meta.Uploaded["YouTube: Test"] = "https://youtube.com/shorts/x";
+                meta.Save(Path.ChangeExtension(clipPath, ".json"));
+                main.Page = "library";
+                main.Library.Refresh();
+                main.Library.Selected = main.Library.Clips.FirstOrDefault();
+                window.UpdateLayout();
+                await Task.Delay(800);
+                Console.Out.WriteLine($"library ok: {main.Library.Clips.Count} clip(s), {main.Library.UploadTargets.Count} konto(s)");
+
+                var redoVm = new RedoViewModel(main, main.Library.Selected!.Clip);
+                var redo = new Views.RedoWindow(redoVm) { Owner = window };
+                redo.Show();
+                for (var i = 0; i < 40 && redoVm.Frame is null && redoVm.Status.Length == 0; i++)
+                {
+                    await Task.Delay(250);
+                }
+
+                redo.SetCamForTest(new UCut.Editing.NormRect(0.7, 0.65, 0.28, 0.3));
+                redo.UpdateLayout();
+                var ready = redoVm.CanRun(out var why);
+                redo.Close();
+                Console.Out.WriteLine($"redo ok: landscape={redoVm.IsLandscape}, frame={redoVm.Frame is not null}, words={redoVm.Words.Count}, ready={ready} {why} {redoVm.Status}");
+                if (redoVm.Frame is null || !ready)
+                {
+                    throw new InvalidOperationException("Neu-machen-Dialog: kein Standbild oder nicht bereit");
+                }
+            }
+
+            // Twitch preview panel with a fake clip; yt-dlp is missing here, so it must show an error text, not crash.
+            main.Page = "twitch";
+            var fake = new UCut.Twitch.TwitchClip("selftest", "https://clips.twitch.tv/selftest", "Selbsttest xD", 42, DateTimeOffset.Now, 12, "0", "test")
+            {
+                GameName = "Test",
+            };
+            var item = new TwitchItem(new UCut.Twitch.ClipCandidate(fake, 1, ["„xd“ im Titel"]));
+            main.Twitch.Items.Add(item);
+            main.Twitch.Current = item;
+            window.UpdateLayout();
+            for (var i = 0; i < 20 && main.Twitch.PreviewStatus.EndsWith("...", StringComparison.Ordinal); i++)
+            {
+                await Task.Delay(250);
+            }
+
+            window.UpdateLayout();
+            Console.Out.WriteLine($"twitch preview ok: {main.Twitch.PreviewStatus}");
+
+            Shutdown(0);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            Shutdown(3);
+        }
+    }
+
+    /// <summary>Silences every player at once when the window closes (a playing clip went on to the end before).</summary>
+    private static void StopMedia(DependencyObject parent)
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is System.Windows.Controls.MediaElement media)
+            {
+                media.Stop();
+                media.Close();
+            }
+
+            StopMedia(child);
+        }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _main?.Dispose();
+        base.OnExit(e);
+    }
+}

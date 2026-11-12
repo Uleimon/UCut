@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} (Build + Tests mit ffmpeg)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: ffmpeg installieren (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: ffmpeg installieren (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+      - run: dotnet build -c Release
+      - run: dotnet test -c Release --no-build --logger "trx;LogFileName=tests.trx" --results-directory TestResults
+      - name: Kein Test darf übersprungen worden sein (ffmpeg fehlt sonst)
+        shell: bash
+        run: |
+          if grep -q 'outcome="NotExecuted"' TestResults/*.trx; then
+            echo "::error::Tests wurden übersprungen"; exit 1
+          fi
+      - name: Oberfläche zeigt jede Seite fehlerfrei an (Selbsttest)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force TestResults | Out-Null
+          $video = Join-Path $env:RUNNER_TEMP "selftest.mp4"
+          ffmpeg -v error -y -f lavfi -i testsrc2=size=1280x720:rate=30:duration=4 -f lavfi -i sine=frequency=440:duration=4 -f lavfi -i sine=frequency=880:duration=4 -map 0 -map 1 -map 2 -c:v libx264 -pix_fmt yuv420p -c:a aac $video
+          $env:UCUT_SELFTEST_VIDEO = $video
+          $p = Start-Process -FilePath "src\UCut.Desktop\bin\Release\net10.0-windows\UCut.exe" -ArgumentList "--ui-selftest" -PassThru -RedirectStandardOutput TestResults\ui-selftest.txt -RedirectStandardError TestResults\ui-selftest-err.txt
+          $done = $p.WaitForExit(120000)
+          if (-not $done) { Stop-Process -Id $p.Id; Start-Sleep -Seconds 1 }
+          Get-Content TestResults\ui-selftest.txt
+          Get-Content TestResults\ui-selftest-err.txt -TotalCount 80
+          if (-not $done) { Write-Error "Selbsttest hängt"; exit 1 }
+          if ($p.ExitCode -ne 0) { Write-Error "Selbsttest fehlgeschlagen (Code $($p.ExitCode))"; exit 1 }
+          if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'cutroom ok' -Quiet)) { Write-Error "Schnittraum wurde nicht getestet"; exit 1 }
+          if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'effects ok: 2 effect' -Quiet)) { Write-Error "Memes/Effekte wurden nicht getestet"; exit 1 }
+          if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'twitch preview ok' -Quiet)) { Write-Error "Twitch-Vorschau wurde nicht getestet"; exit 1 }
+          if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'library ok' -Quiet)) { Write-Error "Galerie wurde nicht getestet"; exit 1 }
+          if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'redo ok' -Quiet)) { Write-Error "Neu machen wurde nicht getestet"; exit 1 }
+      - name: Untertitel laufen in eigenem Prozess (UCut.exe --whisper-worker)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "ww"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $wav = Join-Path $dir "a.wav"
+          ffmpeg -v error -y -f lavfi -i sine=frequency=300:duration=3 -ar 16000 -ac 1 -c:a pcm_s16le $wav
+          @{ Wav = $wav; Model = "tiny"; ModelFolder = (Join-Path $dir "models"); Language = "de"; Dtw = $true } | ConvertTo-Json | Set-Content (Join-Path $dir "req.json")
+          $res = Join-Path $dir "res.json"
+          $p = Start-Process -FilePath "src\UCut.Desktop\bin\Release\net10.0-windows\UCut.exe" -ArgumentList "--whisper-worker", (Join-Path $dir "req.json"), $res -PassThru
+          $done = $p.WaitForExit(600000)
+          if (-not $done) { Stop-Process -Id $p.Id; Write-Error "Worker hängt"; exit 1 }
+          if ($p.ExitCode -ne 0) { Write-Error "Worker fehlgeschlagen (Code $($p.ExitCode))"; exit 1 }
+          if (-not (Test-Path $res)) { Write-Error "Kein Ergebnis"; exit 1 }
+          Get-Content $res

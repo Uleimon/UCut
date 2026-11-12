@@ -1,0 +1,111 @@
+<Window x:Class="UCut.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:UCut.Desktop.ViewModels"
+        xmlns:v="clr-namespace:UCut.Desktop.Views"
+        xmlns:local="clr-namespace:UCut.Desktop"
+        Title="UCut" Width="1360" Height="840" MinWidth="1000" MinHeight="640"
+        Background="{StaticResource WindowBrush}" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
+        Foreground="{StaticResource TextBrush}" Icon="Assets/ucut-256.png"
+        AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver" DragLeave="OnDragLeave">
+    <Window.Resources>
+        <local:EqualsConverter x:Key="Eq"/>
+        <local:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <local:NullToVisibilityConverter x:Key="NullToVis"/>
+        <DataTemplate DataType="{x:Type vm:LibraryViewModel}"><v:LibraryView/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CutRoomViewModel}"><v:CutRoomView/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ImportViewModel}"><v:ImportView/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:TwitchViewModel}"><v:TwitchView/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><v:SettingsView/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:LogViewModel}"><v:LogView/></DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="88"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Sidebar -->
+        <Border Grid.RowSpan="2" Background="{StaticResource SidebarBrush}">
+            <DockPanel Margin="8,14">
+                <Image DockPanel.Dock="Top" Source="Assets/ucut-256.png" Width="44" Height="44" Margin="0,0,0,18" RenderOptions.BitmapScalingMode="HighQuality"/>
+                <StackPanel DockPanel.Dock="Bottom">
+                    <ToggleButton ToolTip="Aitum-Ordner überwachen: neue Clips werden automatisch fertig gemacht" Cursor="Hand"
+                                  IsChecked="{Binding IsWatching}" Margin="0,0,0,4">
+                        <ToggleButton.Template>
+                            <ControlTemplate TargetType="ToggleButton">
+                                <Border x:Name="Bd" CornerRadius="10" Padding="0,10" Background="Transparent">
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock x:Name="Ic" Text="&#xE7F4;" FontFamily="{StaticResource Icons}" FontSize="20" HorizontalAlignment="Center" Foreground="{StaticResource SubtleTextBrush}"/>
+                                        <TextBlock x:Name="Tx" Text="Auto aus" FontSize="11" Margin="0,4,0,0" HorizontalAlignment="Center" Foreground="{StaticResource SubtleTextBrush}"/>
+                                    </StackPanel>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsChecked" Value="True">
+                                        <Setter TargetName="Ic" Property="Foreground" Value="{StaticResource OkBrush}"/>
+                                        <Setter TargetName="Tx" Property="Foreground" Value="{StaticResource OkBrush}"/>
+                                        <Setter TargetName="Tx" Property="Text" Value="Auto an"/>
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </ToggleButton.Template>
+                    </ToggleButton>
+                    <RadioButton Style="{StaticResource NavItem}" Content="Protokoll" Tag="&#xE81C;" GroupName="nav"
+                                 IsChecked="{Binding Page, Converter={StaticResource Eq}, ConverterParameter=log}"/>
+                    <RadioButton Style="{StaticResource NavItem}" Content="Einstellungen" Tag="&#xE713;" GroupName="nav"
+                                 IsChecked="{Binding Page, Converter={StaticResource Eq}, ConverterParameter=settings}"/>
+                </StackPanel>
+                <StackPanel>
+                    <RadioButton Style="{StaticResource NavItem}" Content="Clips" Tag="&#xE8B9;" GroupName="nav"
+                                 IsChecked="{Binding Page, Converter={StaticResource Eq}, ConverterParameter=library}"/>
+                    <RadioButton Style="{StaticResource NavItem}" Content="Schnittraum" Tag="&#xE8C6;" GroupName="nav"
+                                 IsChecked="{Binding Page, Converter={StaticResource Eq}, ConverterParameter=cutroom}"/>
+                    <RadioButton Style="{StaticResource NavItem}" Content="Hinzufügen" Tag="&#xE710;" GroupName="nav"
+                                 IsChecked="{Binding Page, Converter={StaticResource Eq}, ConverterParameter=import}"/>
+                    <RadioButton Style="{StaticResource NavItem}" Content="Twitch" Tag="&#xE93E;" GroupName="nav"
+                                 IsChecked="{Binding Page, Converter={StaticResource Eq}, ConverterParameter=twitch}"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Page -->
+        <ContentControl Grid.Column="1" Content="{Binding CurrentPage}" Focusable="False"/>
+
+        <!-- Status bar: running job, missing tools, last log line -->
+        <Border Grid.Row="1" Grid.Column="1" Background="{StaticResource SidebarBrush}" Padding="16,8">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource Danger}" Content="Abbrechen" Command="{Binding CancelJobCommand}" Margin="8,0,0,0"
+                        Visibility="{Binding JobRunning, Converter={StaticResource BoolToVis}}"/>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Visibility="{Binding JobRunning, Converter={StaticResource BoolToVis}}">
+                    <ProgressBar Width="220" Maximum="1" Value="{Binding JobProgress, Mode=OneWay}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock DockPanel.Dock="Left" Text="{Binding ToolWarning}" Foreground="{StaticResource WarnBrush}" Margin="0,0,16,0" VerticalAlignment="Center"
+                           Visibility="{Binding ToolWarning, Converter={StaticResource NullToVis}}"/>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock FontWeight="SemiBold" Text="{Binding JobTitle}" Visibility="{Binding JobRunning, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock Style="{StaticResource Subtle}" Text="{Binding JobDetail}" Visibility="{Binding JobRunning, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock Style="{StaticResource Subtle}" Text="{Binding LogPage.LastLine}"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Drop overlay -->
+        <Border x:Name="DropOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" Background="#CC0D0E12" Visibility="Collapsed" IsHitTestVisible="False">
+            <Border BorderBrush="{StaticResource AccentBrush}" BorderThickness="3" CornerRadius="16" Margin="40">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="&#xE898;" FontFamily="{StaticResource Icons}" FontSize="64" HorizontalAlignment="Center" Foreground="{StaticResource AccentBrush}"/>
+                    <TextBlock Text="Clips hier loslassen" FontSize="26" FontWeight="Bold" Margin="0,12,0,0" HorizontalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource Subtle}" FontSize="14" Text="UCut schneidet sie, setzt Untertitel und Logo und legt sie in deine Bibliothek" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Border>
+    </Grid>
+</Window>
