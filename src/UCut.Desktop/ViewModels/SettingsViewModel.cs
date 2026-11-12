@@ -144,7 +144,16 @@ internal sealed class SettingsViewModel : ObservableObject
     public string ClaudeKey { get => _claudeKey; set => Set(ref _claudeKey, value.Trim()); }
     public bool UseClaude { get => _s.Writer.UseClaude; set { _s.Writer.UseClaude = value; OnPropertyChanged(); } }
     public bool TrendHashtags { get => _s.Writer.TrendHashtags; set { _s.Writer.TrendHashtags = value; OnPropertyChanged(); } }
-    public bool TabletEnabled { get => _s.Tablet.Enabled; set { _s.Tablet.Enabled = value; OnPropertyChanged(); } }
+    public bool TabletEnabled
+    {
+        get => _s.Tablet.Enabled;
+        set
+        {
+            _s.Tablet.Enabled = value;
+            OnPropertyChanged();
+            _main.SetTabletEnabled(value);
+        }
+    }
     public int TabletPort { get => _s.Tablet.Port; set { _s.Tablet.Port = Math.Clamp(value, 1024, 65535); OnPropertyChanged(); } }
     public string TabletStatus => _main.TabletStatus;
     public bool ShowUploadHint { get => _s.Upload.ShowUploadHint; set { _s.Upload.ShowUploadHint = value; OnPropertyChanged(); } }

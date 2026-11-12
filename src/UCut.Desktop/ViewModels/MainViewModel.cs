@@ -68,6 +68,25 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
     /// <summary>What the settings page shows about the tablet connection (address and code).</summary>
     public string TabletStatus { get => _tabletStatus; private set => Set(ref _tabletStatus, value); }
 
+    /// <summary>The tick in the settings: saved and applied right away (no "Speichern" needed).</summary>
+    public void SetTabletEnabled(bool on)
+    {
+        Engine.Settings.Tablet.Enabled = on;
+        try
+        {
+            var saved = SettingsStore.Load(SettingsPath);
+            saved.Tablet.Enabled = on;
+            SettingsStore.Save(saved, SettingsPath);
+        }
+        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException)
+        {
+            Log.Write($"Einstellung nicht gespeichert: {ex.Message}");
+        }
+
+        TabletStatus = on ? "Wird eingeschaltet …" : TabletStatus;
+        _ = ApplyTabletAsync();
+    }
+
     /// <summary>Starts, restarts or stops the tablet connection to match the settings.</summary>
     public async Task ApplyTabletAsync()
     {
@@ -75,7 +94,7 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
         if (!t.Enabled)
         {
             await Tablet.StopAsync();
-            TabletStatus = "Aus.";
+            TabletStatus = "Aus. Haken bei „Tablet-App erlauben“ setzen, dann geht es sofort an.";
             return;
         }
 
@@ -108,9 +127,9 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
             TabletStatus = $"An. Die Tablet-App findet den PC von selbst (sonst Adresse eingeben: {where}). Code: {t.Code}";
             Log.Write($"Tablet-Verbindung an: {where}");
         }
-        catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or InvalidOperationException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            TabletStatus = $"Ging nicht an: {ex.Message} (anderer Port in den Einstellungen?)";
+            TabletStatus = $"Ging nicht an: {ex.Message} (anderen Port eintragen und speichern?)";
             Log.Write($"Tablet-Verbindung: {ex.Message}");
         }
     }

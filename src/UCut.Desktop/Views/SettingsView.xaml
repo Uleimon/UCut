@@ -78,7 +78,7 @@
                             <TextBox Text="{Binding TabletPort}" Width="80" Margin="0,0,12,0"/>
                             <Button Content="Neuen Code machen" Command="{Binding NewTabletCodeCommand}"/>
                         </WrapPanel>
-                        <TextBlock Style="{StaticResource Hint}" Text="Nach dem Anhaken oben auf „Speichern“ drücken."/>
+                        <TextBlock Style="{StaticResource Hint}" Text="Der Haken wirkt sofort. Port geändert? Dann oben auf „Speichern“."/>
                     </StackPanel>
                 </Border>
 
