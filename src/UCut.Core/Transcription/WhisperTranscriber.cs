@@ -5,18 +5,18 @@ using UCut.Settings;
 namespace UCut.Transcription;
 
 /// <summary>Local speech recognition with whisper.cpp (Whisper.net). The model is downloaded on first use.</summary>
-public sealed class WhisperTranscriber(WhisperSettings settings, Action<string>? log = null) : ITranscriber
+public sealed class WhisperTranscriber(WhisperSettings settings, Action<string>? log = null, bool dtw = true) : ITranscriber
 {
     public async Task<Transcript> TranscribeAsync(string wav16kMono, CancellationToken ct = default)
     {
         var type = ParseModel(settings.Model);
-        var modelPath = await EnsureModelAsync(type, ct).ConfigureAwait(false);
+        var modelPath = await EnsureModelAsync(ct).ConfigureAwait(false);
 
         // DTW timestamps give usable per-word times; the plain token timestamps of whisper.cpp drift by seconds.
         using var factory = WhisperFactory.FromPath(modelPath, new WhisperFactoryOptions
         {
-            UseDtwTimeStamps = true,
-            HeadsPreset = HeadsFor(type),
+            UseDtwTimeStamps = dtw,
+            HeadsPreset = dtw ? HeadsFor(type) : WhisperAlignmentHeadsPreset.None,
         });
 
         // Beam search: with greedy decoding whisper.cpp tends to invent things like *Kreis* "..." on game audio.
@@ -116,8 +116,10 @@ public sealed class WhisperTranscriber(WhisperSettings settings, Action<string>?
         _ => WhisperAlignmentHeadsPreset.None,
     };
 
-    private async Task<string> EnsureModelAsync(GgmlType type, CancellationToken ct)
+    /// <summary>Path of the model file, downloaded first if it is missing.</summary>
+    public async Task<string> EnsureModelAsync(CancellationToken ct = default)
     {
+        var type = ParseModel(settings.Model);
         var folder = string.IsNullOrWhiteSpace(settings.ModelFolder)
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UCut", "models")
             : settings.ModelFolder;

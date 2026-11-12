@@ -14,6 +14,25 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (e.Args.Length > 0 && e.Args[0] == UCut.Transcription.WhisperWorker.Argument)
+        {
+            // Started by UCut itself for one clip's subtitles: no window, just the work.
+            int code;
+            try
+            {
+                code = UCut.Transcription.WhisperWorker.Run(e.Args);
+            }
+            catch (Exception ex)
+            {
+                WriteCrash(ex);
+                code = 1;
+            }
+
+            Shutdown(code);
+            return;
+        }
+
+        UCut.Transcription.WhisperWorker.ExecutablePath = Environment.ProcessPath;
         _selfTest = e.Args.Contains("--ui-selftest");
         DispatcherUnhandledException += (_, args) =>
         {

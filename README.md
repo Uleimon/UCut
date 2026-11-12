@@ -15,7 +15,7 @@ Sobald Aitum Vertical einen Clip speichert, passiert Folgendes:
 
 ## Das Programm
 
-`UCut-Setup-0.6.3.exe` installiert UCut wie ein normales Programm (ohne Admin-Rechte, nach `%LOCALAPPDATA%\Programs\UCut`), mit eigenem Icon im Startmenü und auf dem Desktop. Eine neue Version einfach drüber installieren: das Setup schließt UCut, ersetzt den Programmordner komplett und lässt Einstellungen, Konten und Clips in Ruhe. Deinstallieren geht über *Einstellungen → Apps*.
+`UCut-Setup-0.6.4.exe` installiert UCut wie ein normales Programm (ohne Admin-Rechte, nach `%LOCALAPPDATA%\Programs\UCut`), mit eigenem Icon im Startmenü und auf dem Desktop. Eine neue Version einfach drüber installieren: das Setup schließt UCut, ersetzt den Programmordner komplett und lässt Einstellungen, Konten und Clips in Ruhe. Deinstallieren geht über *Einstellungen → Apps*.
 
 Fehlen ffmpeg oder yt-dlp, lädt UCut sie beim Start selbst nach `%LOCALAPPDATA%\UCut\tools` (einmalig, ohne Admin-Rechte).
 

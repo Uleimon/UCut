@@ -59,3 +59,19 @@ jobs:
           if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'twitch preview ok' -Quiet)) { Write-Error "Twitch-Vorschau wurde nicht getestet"; exit 1 }
           if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'library ok' -Quiet)) { Write-Error "Galerie wurde nicht getestet"; exit 1 }
           if (-not (Select-String -Path TestResults\ui-selftest.txt -Pattern 'redo ok' -Quiet)) { Write-Error "Neu machen wurde nicht getestet"; exit 1 }
+      - name: Untertitel laufen in eigenem Prozess (UCut.exe --whisper-worker)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "ww"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $wav = Join-Path $dir "a.wav"
+          ffmpeg -v error -y -f lavfi -i sine=frequency=300:duration=3 -ar 16000 -ac 1 -c:a pcm_s16le $wav
+          @{ Wav = $wav; Model = "tiny"; ModelFolder = (Join-Path $dir "models"); Language = "de"; Dtw = $true } | ConvertTo-Json | Set-Content (Join-Path $dir "req.json")
+          $res = Join-Path $dir "res.json"
+          $p = Start-Process -FilePath "src\UCut.Desktop\bin\Release\net10.0-windows\UCut.exe" -ArgumentList "--whisper-worker", (Join-Path $dir "req.json"), $res -PassThru
+          $done = $p.WaitForExit(600000)
+          if (-not $done) { Stop-Process -Id $p.Id; Write-Error "Worker hängt"; exit 1 }
+          if ($p.ExitCode -ne 0) { Write-Error "Worker fehlgeschlagen (Code $($p.ExitCode))"; exit 1 }
+          if (-not (Test-Path $res)) { Write-Error "Kein Ergebnis"; exit 1 }
+          Get-Content $res

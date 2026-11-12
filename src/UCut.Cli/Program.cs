@@ -19,6 +19,12 @@ using UCut.App;
 //   ucut game [...]                                aktuelles Spiel anzeigen
 //   ucut twitch [--seit 2020-01-01] [--bis ...] [--alle] [--max N] [--liste]  alte Twitch-Clips laden und verarbeiten
 
+if (args.Length > 0 && args[0] == WhisperWorker.Argument)
+{
+    return WhisperWorker.Run(args);
+}
+
+WhisperWorker.ExecutablePath = Environment.ProcessPath;
 var arguments = args.ToList();
 var settingsPath = TakeOption(arguments, "--settings") ?? SettingsStore.DefaultPath;
 // Drag & drop onto ucut.exe: Windows starts it with the dropped paths as arguments.
