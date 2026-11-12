@@ -12,10 +12,17 @@ public sealed class WhisperWorkerTests
         return (new WhisperSettings { Model = "tiny", ModelFolder = dir, Language = "de" }, dir);
     }
 
-    private static string Script(string dir, string body)
+    private static string Script(string dir, string unix, string windows)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            var cmd = Path.Combine(dir, "worker.cmd");
+            File.WriteAllText(cmd, "@echo off\r\n" + windows + "\r\n");
+            return cmd;
+        }
+
         var path = Path.Combine(dir, "worker.sh");
-        File.WriteAllText(path, "#!/bin/sh\n" + body + "\n");
+        File.WriteAllText(path, "#!/bin/sh\n" + unix + "\n");
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
@@ -27,10 +34,10 @@ public sealed class WhisperWorkerTests
     [Fact]
     public async Task CrashingWorker_RetriesWithoutDtw_ThenGoesOnWithoutSubtitles()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Shell-Skript als Ersatz-Worker");
         var (settings, dir) = FakeModel();
         var calls = Path.Combine(dir, "calls.txt");
-        var worker = Script(dir, $"cat \"$2\" >> '{calls}'; echo >> '{calls}'; kill -SEGV $$");
+        var worker = Script(dir, $"cat \"$2\" >> '{calls}'; echo >> '{calls}'; kill -SEGV $$",
+            $"type \"%2\" >> \"{calls}\"\r\necho.>> \"{calls}\"\r\nexit /b 3");
         var log = new List<string>();
 
         var t = await new IsolatedTranscriber(settings, worker, log.Add).TranscribeAsync("audio.wav", TestContext.Current.CancellationToken);
@@ -46,9 +53,9 @@ public sealed class WhisperWorkerTests
     [Fact]
     public async Task Worker_ResultIsRead()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Shell-Skript als Ersatz-Worker");
         var (settings, dir) = FakeModel();
-        var worker = Script(dir, "[ \"$1\" = \"--whisper-worker\" ] || exit 5; echo '[{\"Text\":\"Hallo\",\"Start\":0.5,\"End\":0.9}]' > \"$3\"");
+        var worker = Script(dir, "[ \"$1\" = \"--whisper-worker\" ] || exit 5; echo '[{\"Text\":\"Hallo\",\"Start\":0.5,\"End\":0.9}]' > \"$3\"",
+            "if not \"%1\"==\"--whisper-worker\" exit /b 5\r\necho [{\"Text\":\"Hallo\",\"Start\":0.5,\"End\":0.9}]> \"%3\"");
 
         var t = await new IsolatedTranscriber(settings, worker).TranscribeAsync("audio.wav", TestContext.Current.CancellationToken);
 
