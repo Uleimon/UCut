@@ -68,6 +68,8 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(Color.parseColor("#121318"));
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.parseColor("#0D0E12"));
+        // Android 15 draws apps under the status bar; keep the page below it.
+        root.setFitsSystemWindows(true);
         web = new WebView(this);
         web.setBackgroundColor(Color.parseColor("#0D0E12"));
         root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
