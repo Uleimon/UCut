@@ -1,11 +1,13 @@
 package com.uleimon.ucut;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -22,6 +24,7 @@ import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -31,27 +34,37 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FilterInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
  * UCut companion: a web view on the UCut page that the PC serves in the home network,
- * plus what a web page cannot do: find the PC, copy text, and hand a clip to the TikTok/YouTube/Instagram app.
+ * plus what a web page cannot do: find the PC, copy text, hand a clip to the TikTok/YouTube/Instagram app,
+ * and keep clips on the tablet to work without the PC (offline, e.g. at school).
  */
 public class MainActivity extends Activity {
     static final int DISCOVERY_PORT = 53791;
+    static final String OFFLINE = "https://ucut.offline/";
     private static final Charset UTF8 = Charset.forName("UTF-8");
 
     private WebView web;
@@ -60,11 +73,14 @@ public class MainActivity extends Activity {
     private WebChromeClient.CustomViewCallback fullscreenCallback;
     private SharedPreferences prefs;
     private ProgressDialog progress;
+    private OfflineStore store;
+    private volatile boolean syncCancelled;
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         prefs = getSharedPreferences("ucut", MODE_PRIVATE);
+        store = new OfflineStore(getFilesDir());
         getWindow().setStatusBarColor(Color.parseColor("#121318"));
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.parseColor("#0D0E12"));
@@ -86,7 +102,7 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 String saved = prefs.getString("url", "");
-                if (url.startsWith("file:") || (!saved.isEmpty() && url.startsWith(saved))) {
+                if (url.startsWith("file:") || url.startsWith(OFFLINE) || (!saved.isEmpty() && url.startsWith(saved))) {
                     return false;
                 }
                 try {
@@ -97,17 +113,25 @@ public class MainActivity extends Activity {
             }
 
             @Override
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (request.isForMainFrame()) {
-                    showSetup("Der PC ist gerade nicht erreichbar. Läuft UCut am PC, ist die Tablet-App dort erlaubt und ist das Tablet im selben WLAN?");
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                if (request.getUrl().toString().startsWith(OFFLINE)) {
+                    return serveOffline(request);
+                }
+                return null;
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                String saved = prefs.getString("url", "");
+                if (!saved.isEmpty() && url.startsWith(saved)) {
+                    pushPendingInBackground();
                 }
             }
 
-            @SuppressWarnings("deprecation")
             @Override
-            public void onReceivedError(WebView view, int code, String description, String failingUrl) {
-                if (failingUrl != null && failingUrl.equals(view.getUrl())) {
-                    showSetup("Der PC ist gerade nicht erreichbar. Läuft UCut am PC, ist die Tablet-App dort erlaubt und ist das Tablet im selben WLAN?");
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame() && !request.getUrl().toString().startsWith(OFFLINE)) {
+                    pcNotReachable();
                 }
             }
         });
@@ -127,11 +151,47 @@ public class MainActivity extends Activity {
             }
         });
 
-        String url = prefs.getString("url", null);
+        openPcOrOffline();
+    }
+
+    /** Tries the PC (short timeout); without it the clips on the tablet open, if there are any. */
+    private void openPcOrOffline() {
+        final String url = prefs.getString("url", null);
         if (url == null) {
             showSetup(null);
+            return;
+        }
+        new Thread(new Runnable() {
+            public void run() {
+                boolean reachable = false;
+                try {
+                    Uri u = Uri.parse(url);
+                    Socket socket = new Socket();
+                    socket.connect(new InetSocketAddress(u.getHost(), u.getPort()), 1500);
+                    socket.close();
+                    reachable = true;
+                } catch (IOException ignored) {
+                }
+                final boolean ok = reachable;
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        if (ok) {
+                            web.loadUrl(url);
+                        } else {
+                            pcNotReachable();
+                        }
+                    }
+                });
+            }
+        }).start();
+    }
+
+    private void pcNotReachable() {
+        if (store.hasClips()) {
+            Toast.makeText(this, "PC nicht erreichbar: du arbeitest mit den Clips auf dem Tablet.", Toast.LENGTH_LONG).show();
+            web.loadUrl(OFFLINE);
         } else {
-            web.loadUrl(url);
+            showSetup("Der PC ist gerade nicht erreichbar. Läuft UCut am PC, ist die Tablet-App dort erlaubt und ist das Tablet im selben WLAN?");
         }
     }
 
@@ -197,6 +257,438 @@ public class MainActivity extends Activity {
         });
     }
 
+    // ---------- Offline: serve the stored clips as if the PC sent them ----------
+
+    private WebResourceResponse serveOffline(WebResourceRequest request) {
+        String path = request.getUrl().getPath();
+        if (path == null || path.equals("/") || path.equals("/index.html")) {
+            return file(store.page(), "text/html", "utf-8");
+        }
+        if (path.equals("/api/hello")) {
+            JSONObject meta = store.meta();
+            String json = "{\"name\":\"UCut\",\"pc\":" + JSONObject.quote(meta.optString("pc", "PC")) + ",\"version\":"
+                    + JSONObject.quote(meta.optString("version", "")) + ",\"loggedIn\":true,\"offline\":true}";
+            return text(json, "application/json");
+        }
+        if (path.equals("/api/clips")) {
+            return text(store.clips().toString(), "application/json");
+        }
+        String[] parts = path.split("/");
+        if (parts.length == 5 && "clips".equals(parts[2]) && parts[3].matches("\\w+")) {
+            if ("thumb".equals(parts[4])) {
+                return file(store.thumb(parts[3]), "image/jpeg", null);
+            }
+            if ("video".equals(parts[4])) {
+                return video(store.video(parts[3]), request.getRequestHeaders());
+            }
+        }
+        return notFound();
+    }
+
+    private static WebResourceResponse text(String body, String mime) {
+        return new WebResourceResponse(mime, "utf-8", new ByteArrayInputStream(body.getBytes(UTF8)));
+    }
+
+    private static WebResourceResponse notFound() {
+        return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", new HashMap<String, String>(),
+                new ByteArrayInputStream(new byte[0]));
+    }
+
+    private static WebResourceResponse file(File f, String mime, String encoding) {
+        try {
+            return new WebResourceResponse(mime, encoding, new FileInputStream(f));
+        } catch (IOException e) {
+            return notFound();
+        }
+    }
+
+    /** The video with seeking: answers "Range: bytes=a-b" with 206 and just that part. */
+    private static WebResourceResponse video(File f, Map<String, String> requestHeaders) {
+        if (!f.isFile()) {
+            return notFound();
+        }
+        long length = f.length();
+        long start = 0;
+        long end = length - 1;
+        String range = null;
+        for (Map.Entry<String, String> h : requestHeaders.entrySet()) {
+            if ("range".equalsIgnoreCase(h.getKey())) {
+                range = h.getValue();
+            }
+        }
+        boolean partial = false;
+        if (range != null && range.startsWith("bytes=")) {
+            String[] r = range.substring(6).split("-", 2);
+            try {
+                if (r[0].length() > 0) {
+                    start = Long.parseLong(r[0].trim());
+                }
+                if (r.length > 1 && r[1].trim().length() > 0) {
+                    end = Math.min(end, Long.parseLong(r[1].trim()));
+                }
+                partial = true;
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        if (start > end) {
+            start = 0;
+            end = length - 1;
+            partial = false;
+        }
+        Map<String, String> headers = new HashMap<String, String>();
+        headers.put("Accept-Ranges", "bytes");
+        headers.put("Content-Length", String.valueOf(end - start + 1));
+        if (partial) {
+            headers.put("Content-Range", "bytes " + start + "-" + end + "/" + length);
+        }
+        try {
+            final FileInputStream in = new FileInputStream(f);
+            long skipped = 0;
+            while (skipped < start) {
+                long n = in.skip(start - skipped);
+                if (n <= 0) {
+                    break;
+                }
+                skipped += n;
+            }
+            InputStream limited = new Limited(in, end - start + 1);
+            return new WebResourceResponse("video/mp4", null, partial ? 206 : 200, partial ? "Partial Content" : "OK", headers, limited);
+        } catch (IOException e) {
+            return notFound();
+        }
+    }
+
+    /** Reads at most n bytes. */
+    private static final class Limited extends FilterInputStream {
+        private long left;
+
+        Limited(InputStream in, long n) {
+            super(in);
+            left = n;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (left <= 0) {
+                return -1;
+            }
+            int b = super.read();
+            if (b >= 0) {
+                left--;
+            }
+            return b;
+        }
+
+        @Override
+        public int read(byte[] buf, int off, int len) throws IOException {
+            if (left <= 0) {
+                return -1;
+            }
+            int n = super.read(buf, off, (int) Math.min(len, left));
+            if (n > 0) {
+                left -= n;
+            }
+            return n;
+        }
+    }
+
+    // ---------- Talking to the PC ----------
+
+    private String pcUrl() {
+        return prefs.getString("url", "");
+    }
+
+    private HttpURLConnection open(String url) throws IOException {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        String cookie = CookieManager.getInstance().getCookie(url);
+        if (cookie != null) {
+            c.setRequestProperty("Cookie", cookie);
+        }
+        c.setConnectTimeout(8000);
+        c.setReadTimeout(30000);
+        return c;
+    }
+
+    private String getText(String url) throws IOException {
+        HttpURLConnection c = open(url);
+        try {
+            if (c.getResponseCode() != 200) {
+                throw new IOException("Der PC antwortet mit " + c.getResponseCode());
+            }
+            InputStream in = c.getInputStream();
+            try {
+                return new String(OfflineStore.readAll(in), UTF8);
+            } finally {
+                in.close();
+            }
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    /** Downloads into target (via a .part file). Reports bytes as they come. */
+    private void download(String url, File target, ByteCounter counter) throws IOException {
+        HttpURLConnection c = open(url);
+        File part = new File(target.getPath() + ".part");
+        try {
+            if (c.getResponseCode() != 200) {
+                throw new IOException("Der PC antwortet mit " + c.getResponseCode());
+            }
+            InputStream in = c.getInputStream();
+            OutputStream out = new FileOutputStream(part);
+            try {
+                byte[] buf = new byte[65536];
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    if (syncCancelled) {
+                        throw new IOException("abgebrochen");
+                    }
+                    out.write(buf, 0, n);
+                    if (counter != null) {
+                        counter.add(n);
+                    }
+                }
+            } finally {
+                out.close();
+                in.close();
+            }
+            target.delete();
+            if (!part.renameTo(target)) {
+                throw new IOException("Speichern auf dem Tablet ging nicht");
+            }
+        } finally {
+            part.delete();
+            c.disconnect();
+        }
+    }
+
+    private interface ByteCounter {
+        void add(long n);
+    }
+
+    /** Sends the changes made offline to the PC. Returns how many went through. */
+    private int pushPending() {
+        String base = pcUrl();
+        JSONArray pending = store.pending();
+        if (base.isEmpty() || pending.length() == 0) {
+            return 0;
+        }
+        JSONArray left = new JSONArray();
+        int sent = 0;
+        boolean pcGone = false;
+        for (int i = 0; i < pending.length(); i++) {
+            JSONObject op = pending.optJSONObject(i);
+            if (op == null) {
+                continue;
+            }
+            if (pcGone) {
+                left.put(op);
+                continue;
+            }
+            try {
+                HttpURLConnection c = open(base.replaceAll("/$", "") + op.getString("path"));
+                c.setRequestMethod(op.getString("method"));
+                c.setDoOutput(true);
+                c.setRequestProperty("Content-Type", "application/json");
+                OutputStream out = c.getOutputStream();
+                out.write(op.getString("body").getBytes(UTF8));
+                out.close();
+                int code = c.getResponseCode();
+                c.disconnect();
+                if (code == 401) {
+                    pcGone = true;
+                    left.put(op);
+                } else {
+                    // 404 = the clip is gone on the PC: nothing left to do for it.
+                    sent++;
+                }
+            } catch (Exception e) {
+                pcGone = true;
+                left.put(op);
+            }
+        }
+        try {
+            store.savePending(left);
+        } catch (IOException ignored) {
+        }
+        return sent;
+    }
+
+    private void pushPendingInBackground() {
+        if (store.pending().length() == 0) {
+            return;
+        }
+        new Thread(new Runnable() {
+            public void run() {
+                int sent = pushPending();
+                if (sent > 0) {
+                    try {
+                        store.refreshFrom(new JSONArray(getText(pcUrl().replaceAll("/$", "") + "/api/clips")));
+                    } catch (Exception ignored) {
+                    }
+                    toast(sent + " Änderung(en) von unterwegs zum PC übertragen.");
+                    runOnUiThread(new Runnable() {
+                        public void run() {
+                            web.evaluateJavascript("window.load && load()", null);
+                        }
+                    });
+                }
+            }
+        }).start();
+    }
+
+    /** "Für unterwegs laden": copies the chosen clips (video, picture, texts) and the page onto the tablet. */
+    private void syncOffline(final JSONArray ids) {
+        syncCancelled = false;
+        runOnUiThread(new Runnable() {
+            public void run() {
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                progress = new ProgressDialog(MainActivity.this);
+                progress.setTitle("Clips aufs Tablet laden");
+                progress.setMessage("Verbinde mit dem PC …");
+                progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+                progress.setMax(100);
+                progress.setCancelable(false);
+                progress.setButton(DialogInterface.BUTTON_NEGATIVE, "Abbrechen", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int which) {
+                        syncCancelled = true;
+                    }
+                });
+                progress.show();
+            }
+        });
+        new Thread(new Runnable() {
+            public void run() {
+                String base = pcUrl().replaceAll("/$", "");
+                int done = 0;
+                String error = null;
+                try {
+                    pushPending();
+                    JSONArray all = new JSONArray(getText(base + "/api/clips"));
+                    JSONObject hello = new JSONObject(getText(base + "/api/hello"));
+                    String page = getText(base + "/");
+                    Map<String, JSONObject> byId = new HashMap<String, JSONObject>();
+                    for (int i = 0; i < all.length(); i++) {
+                        byId.put(all.getJSONObject(i).getString("id"), all.getJSONObject(i));
+                    }
+                    final JSONArray chosen = new JSONArray();
+                    long needed = 0;
+                    Set<String> keep = new HashSet<String>();
+                    for (int i = 0; i < ids.length(); i++) {
+                        JSONObject c = byId.get(ids.getString(i));
+                        if (c != null) {
+                            chosen.put(c);
+                            keep.add(c.getString("id"));
+                            File v = store.video(c.getString("id"));
+                            if (!v.isFile() || v.length() != c.optLong("size")) {
+                                needed += c.optLong("size");
+                            }
+                        }
+                    }
+                    // Clips no longer chosen leave the tablet (frees space first).
+                    File[] files = store.media.listFiles();
+                    if (files != null) {
+                        for (File f : files) {
+                            String id = f.getName().replaceAll("\\..*$", "");
+                            if (!keep.contains(id)) {
+                                f.delete();
+                            }
+                        }
+                    }
+                    long free = getFilesDir().getUsableSpace();
+                    if (needed > free - 200L * 1024 * 1024) {
+                        throw new IOException(String.format(java.util.Locale.GERMANY,
+                                "Zu wenig Platz auf dem Tablet: gebraucht %.1f GB, frei %.1f GB. Wähl weniger Clips.", needed / 1e9, free / 1e9));
+                    }
+                    OfflineStore.write(store.page(), page);
+                    JSONObject meta = new JSONObject();
+                    meta.put("pc", hello.optString("pc"));
+                    meta.put("version", hello.optString("version"));
+                    meta.put("at", System.currentTimeMillis());
+                    store.saveMeta(meta);
+
+                    final long total = Math.max(1, needed);
+                    final long[] got = {0};
+                    JSONArray stored = new JSONArray();
+                    for (int i = 0; i < chosen.length(); i++) {
+                        if (syncCancelled) {
+                            break;
+                        }
+                        JSONObject c = chosen.getJSONObject(i);
+                        String id = c.getString("id");
+                        final String msg = "Clip " + (i + 1) + " von " + chosen.length() + ": " + c.optString("title");
+                        runOnUiThread(new Runnable() {
+                            public void run() {
+                                if (progress != null) {
+                                    progress.setMessage(msg);
+                                }
+                            }
+                        });
+                        File thumb = store.thumb(id);
+                        if (!thumb.isFile()) {
+                            try {
+                                download(base + "/api/clips/" + id + "/thumb", thumb, null);
+                            } catch (IOException e) {
+                                if (syncCancelled) {
+                                    break;
+                                }
+                            }
+                        }
+                        File video = store.video(id);
+                        if (!video.isFile() || video.length() != c.optLong("size")) {
+                            try {
+                                download(base + "/api/clips/" + id + "/video", video, new ByteCounter() {
+                                    public void add(long n) {
+                                        got[0] += n;
+                                        final int pct = (int) Math.min(100, got[0] * 100 / total);
+                                        runOnUiThread(new Runnable() {
+                                            public void run() {
+                                                if (progress != null) {
+                                                    progress.setProgress(pct);
+                                                }
+                                            }
+                                        });
+                                    }
+                                });
+                            } catch (IOException e) {
+                                if (syncCancelled) {
+                                    break;
+                                }
+                                throw e;
+                            }
+                        }
+                        stored.put(c);
+                        done++;
+                        // Save as we go: a cancel or a lost WLAN keeps what is already there.
+                        store.saveClips(stored);
+                    }
+                    store.saveClips(stored);
+                } catch (Exception e) {
+                    error = e.getMessage();
+                }
+                final int count = done;
+                final String err = error;
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                        if (progress != null) {
+                            progress.dismiss();
+                            progress = null;
+                        }
+                        String text = err != null
+                                ? "Das ging nicht ganz: " + err + "\n\n" + count + " Clips sind auf dem Tablet."
+                                : syncCancelled
+                                ? "Abgebrochen. " + count + " Clips sind auf dem Tablet."
+                                : "Fertig: " + count + " Clips sind auf dem Tablet.\n\nOhne PC (z. B. in der Schule) einfach die App öffnen. Texte und Haken gehen zum PC, sobald du wieder zu Hause bist und die App öffnest.";
+                        new AlertDialog.Builder(MainActivity.this).setTitle("Für unterwegs").setMessage(text)
+                                .setPositiveButton("OK", null).show();
+                        web.evaluateJavascript("window.toggleOffline && document.getElementById('offlinePanel') && !document.getElementById('offlinePanel').classList.contains('hidden') && (toggleOffline(), toggleOffline())", null);
+                    }
+                });
+            }
+        }).start();
+    }
+
     /** Asks every UCut in the WLAN "UCUT?"; each answers "UCUT|pc name|port". */
     private JSONArray discover() {
         JSONArray found = new JSONArray();
@@ -228,7 +720,7 @@ public class MainActivity extends Activity {
                     for (InetAddress t : targets) {
                         try {
                             socket.send(new DatagramPacket(ask, ask.length, t, DISCOVERY_PORT));
-                        } catch (java.io.IOException ignored) {
+                        } catch (IOException ignored) {
                         }
                     }
                 }
@@ -260,12 +752,13 @@ public class MainActivity extends Activity {
         return found;
     }
 
-    /** Downloads the clip from the PC under the given name and hands it to the platform's app. */
+    /** Gets the clip (from the tablet when offline, else from the PC) under the given name and hands it to the platform's app. */
     private void shareClip(final String url, final String fileName, final String text, final String platform) {
+        syncCancelled = false;
         runOnUiThread(new Runnable() {
             public void run() {
                 progress = new ProgressDialog(MainActivity.this);
-                progress.setMessage("Clip wird vom PC geholt …");
+                progress.setMessage(url.startsWith(OFFLINE) ? "Clip wird vorbereitet …" : "Clip wird vom PC geholt …");
                 progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
                 progress.setMax(100);
                 progress.setCancelable(false);
@@ -285,39 +778,40 @@ public class MainActivity extends Activity {
                     }
                     String safe = fileName.replace("/", "∕").replace("\\", "⧵");
                     File file = new File(dir, safe);
-                    HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
-                    String cookie = CookieManager.getInstance().getCookie(url);
-                    if (cookie != null) {
-                        c.setRequestProperty("Cookie", cookie);
-                    }
-                    c.setConnectTimeout(8000);
-                    c.setReadTimeout(30000);
-                    if (c.getResponseCode() != 200) {
-                        throw new java.io.IOException("Der PC antwortet mit " + c.getResponseCode());
-                    }
-                    final long total = c.getContentLength();
-                    InputStream in = c.getInputStream();
-                    OutputStream out = new FileOutputStream(file);
-                    byte[] buf = new byte[65536];
-                    long done = 0;
-                    int n;
-                    while ((n = in.read(buf)) > 0) {
-                        out.write(buf, 0, n);
-                        done += n;
-                        if (total > 0) {
-                            final int pct = (int) (done * 100 / total);
-                            runOnUiThread(new Runnable() {
-                                public void run() {
-                                    if (progress != null) {
-                                        progress.setProgress(pct);
-                                    }
-                                }
-                            });
+                    if (url.startsWith(OFFLINE)) {
+                        String[] parts = Uri.parse(url).getPath().split("/");
+                        File source = store.video(parts.length > 3 ? parts[3] : "");
+                        if (!source.isFile()) {
+                            throw new IOException("Der Clip ist nicht auf dem Tablet.");
                         }
+                        InputStream in = new FileInputStream(source);
+                        OutputStream out = new FileOutputStream(file);
+                        try {
+                            byte[] buf = new byte[65536];
+                            int n;
+                            while ((n = in.read(buf)) > 0) {
+                                out.write(buf, 0, n);
+                            }
+                        } finally {
+                            in.close();
+                            out.close();
+                        }
+                    } else {
+                        final long[] got = {0};
+                        download(url, file, new ByteCounter() {
+                            public void add(long n) {
+                                got[0] += n;
+                                final int mb = (int) (got[0] / 1000000);
+                                runOnUiThread(new Runnable() {
+                                    public void run() {
+                                        if (progress != null) {
+                                            progress.setMessage("Clip wird vom PC geholt … " + mb + " MB");
+                                        }
+                                    }
+                                });
+                            }
+                        });
                     }
-                    out.close();
-                    in.close();
-                    c.disconnect();
                     copyToClipboard(text);
                     final Uri uri = Uri.parse("content://" + ClipProvider.AUTHORITY + "/" + Uri.encode(safe));
                     runOnUiThread(new Runnable() {
@@ -416,14 +910,60 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void retry() {
-            final String url = prefs.getString("url", null);
-            if (url != null) {
-                runOnUiThread(new Runnable() {
-                    public void run() {
-                        web.loadUrl(url);
-                    }
-                });
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    openPcOrOffline();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public boolean offlineAvailable() {
+            return store.hasClips();
+        }
+
+        @JavascriptInterface
+        public void goOffline() {
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    web.loadUrl(OFFLINE);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public String offlineInfo() {
+            try {
+                JSONObject o = new JSONObject();
+                o.put("count", store.clips().length());
+                o.put("bytes", store.bytes());
+                o.put("at", store.meta().optLong("at", 0));
+                o.put("free", getFilesDir().getUsableSpace());
+                o.put("pending", store.pending().length());
+                return o.toString();
+            } catch (Exception e) {
+                return "{}";
             }
+        }
+
+        @JavascriptInterface
+        public void syncOffline(String idsJson) {
+            try {
+                MainActivity.this.syncOffline(new JSONArray(idsJson));
+            } catch (Exception e) {
+                MainActivity.this.toast("Ging nicht: " + e.getMessage());
+            }
+        }
+
+        @JavascriptInterface
+        public void clearOffline() {
+            store.clear();
+            MainActivity.this.toast("Die Clips sind vom Tablet gelöscht.");
+        }
+
+        @JavascriptInterface
+        public String offlineWrite(String method, String path, String body) {
+            return store.write(method, path, body);
         }
 
         @JavascriptInterface

@@ -18,7 +18,7 @@ namespace UCut.Tablet;
 public sealed record TabletClip(
     string Id, string Title, string Game, DateTimeOffset Date, double Duration, int? Funny, string? FunnyReason, int Score,
     IReadOnlyList<string> Uploaded, string TikTokCaption, string YouTubeTitle, string YouTubeDescription, string YouTubeTags,
-    string InstagramCaption);
+    string InstagramCaption, long Size);
 
 /// <summary>Texts sent back by the tablet; null = unchanged.</summary>
 public sealed record TabletTexts(string? TikTokCaption, string? YouTubeTitle, string? YouTubeDescription, string? YouTubeTags, string? InstagramCaption);
@@ -229,7 +229,19 @@ public sealed class TabletServer(Func<UCutSettings> settings, TimeProvider? time
         ClipId(c.VideoPath), c.Title, c.Metadata.Game, c.Date, c.Metadata.DurationSeconds, c.Metadata.Funniness?.Score, c.Metadata.Funniness?.Reason,
         c.Metadata.Score.Total, UploadMarks.Platforms.Where(p => UploadMarks.Has(c.Metadata, p)).ToList(),
         c.Metadata.TikTok.Caption, c.Metadata.YouTube.Title, c.Metadata.YouTube.Description,
-        string.Join(" ", c.Metadata.YouTube.Tags.Select(t => "#" + t.TrimStart('#'))), c.Metadata.Instagram.Caption);
+        string.Join(" ", c.Metadata.YouTube.Tags.Select(t => "#" + t.TrimStart('#'))), c.Metadata.Instagram.Caption, FileSize(c.VideoPath));
+
+    private static long FileSize(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+    }
 
     private static string Version() => typeof(TabletServer).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "";
 

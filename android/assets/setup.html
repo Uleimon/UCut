@@ -29,6 +29,7 @@
   <div class="logo">U<span>Cut</span></div>
   <div id="err" class="err" style="display:none"></div>
   <button id="retry" class="primary" style="display:none" onclick="UCutApp.retry()">Nochmal versuchen</button>
+  <button id="offline" class="primary" style="display:none" onclick="UCutApp.goOffline()">📥 Mit den Clips auf dem Tablet arbeiten (offline)</button>
 
   <div class="card">
     <h2>Dein PC</h2>
@@ -65,6 +66,7 @@ if (params.get("err")) {
   document.getElementById("err").style.display = "block";
   if (UCutApp.savedPc()) document.getElementById("retry").style.display = "block";
 }
+if (UCutApp.offlineAvailable()) document.getElementById("offline").style.display = "block";
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 function search() {

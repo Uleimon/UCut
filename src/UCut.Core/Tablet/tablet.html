@@ -58,6 +58,9 @@
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 12px; max-width: 90vw; z-index: 20; }
   .hint { color: var(--subtle); font-size: 13px; }
   .back { margin-bottom: 12px; }
+  .banner { background: #2a2410; border: 1px solid #a16207; color: #fde68a; border-radius: 10px; padding: 8px 12px; margin-top: 10px; font-size: 14px; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 10px; }
+  .panel select { margin: 8px 0; }
 </style>
 </head>
 <body>
@@ -77,7 +80,19 @@
       <div class="pc" id="pcName"></div>
       <div class="grow"></div>
       <button class="ghost" onclick="load()" title="Neu laden">⟳</button>
+      <button class="appOnly onlineOnly" id="offlineBtn" onclick="toggleOffline()">📥 Für unterwegs</button>
       <button class="ghost appOnly" onclick="UCutApp.changePc()">PC wechseln</button>
+    </div>
+    <div id="offlineBanner" class="banner hidden">Offline: Du arbeitest mit den Clips auf dem Tablet. Texte und Haken gehen zum PC, sobald du wieder zu Hause im WLAN bist und die App öffnest. <button class="appOnly" style="margin-left:8px;padding:6px 10px" onclick="UCutApp.retry()">Mit PC verbinden</button></div>
+    <div id="offlinePanel" class="panel hidden">
+      <b>Clips aufs Tablet laden</b>
+      <div class="hint">Dann kannst du sie ohne PC ansehen, Texte ändern, an TikTok &amp; Co. schicken und Haken setzen, z. B. in der Schule. Lass die App beim Laden offen.</div>
+      <div class="hint" id="offlineInfo" style="margin-top:6px"></div>
+      <select id="offlineMode"></select>
+      <div class="actions">
+        <button class="primary" id="offlineStart" onclick="startOffline()">Aufs Tablet laden</button>
+        <button onclick="clearOffline()">Vom Tablet löschen</button>
+      </div>
     </div>
     <div class="filters" id="filters">
       <input type="search" id="search" placeholder="Suchen …">
@@ -102,6 +117,7 @@
 const inApp = typeof window.UCutApp !== "undefined";
 let clips = [];
 let pc = "";
+let offline = false;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 document.querySelectorAll(".appOnly").forEach(e => { if (!inApp) e.classList.add("hidden"); });
@@ -115,6 +131,11 @@ function toast(msg) {
 }
 
 async function api(path, options) {
+  if (offline && options && options.method && options.method !== "GET") {
+    const answer = UCutApp.offlineWrite(options.method, path, options.body || "");
+    if (!answer) throw new Error("nicht gespeichert");
+    return JSON.parse(answer);
+  }
   const r = await fetch(path, Object.assign({ credentials: "same-origin" }, options || {}));
   if (r.status === 401) { showLogin(); throw new Error("login"); }
   if (!r.ok) throw new Error("Fehler " + r.status);
@@ -138,9 +159,12 @@ $("code").addEventListener("keydown", e => { if (e.key === "Enter") $("loginBtn"
 async function start() {
   const hello = await (await fetch("/api/hello" + location.search)).json();
   pc = hello.pc;
+  offline = !!hello.offline;
   if (!hello.loggedIn) { showLogin(); return; }
+  $("offlineBanner").classList.toggle("hidden", !offline);
+  document.querySelectorAll(".onlineOnly").forEach(e => { if (offline) e.classList.add("hidden"); });
   if (location.search) history.replaceState(null, "", "/" + location.hash);
-  $("pcName").textContent = "PC: " + pc + " · UCut " + hello.version;
+  $("pcName").textContent = (offline ? "Offline · " : "PC: ") + pc + " · UCut " + hello.version;
   $("app").classList.remove("hidden");
   await load();
 }
@@ -302,6 +326,44 @@ async function share(id, key) {
   a.href = url; a.download = fileName(p.file(c));
   document.body.appendChild(a); a.click(); a.remove();
   toast("Video wird gespeichert, der Text ist kopiert.");
+}
+
+const gb = b => b >= 1e9
+  ? (b / 1e9).toLocaleString("de-DE", { maximumFractionDigits: 1 }) + " GB"
+  : Math.max(0, Math.round(b / 1e6)).toLocaleString("de-DE") + " MB";
+const offlineModes = [
+  { key: "notUploaded", label: "Alle noch nicht hochgeladenen", pick: () => clips.filter(c => c.uploaded.length === 0) },
+  { key: "top50", label: "Die 50 lustigsten noch nicht hochgeladenen", pick: () => clips.filter(c => c.uploaded.length === 0).sort((a, b) => (b.funny ?? -1) - (a.funny ?? -1)).slice(0, 50) },
+  { key: "top20", label: "Die 20 lustigsten noch nicht hochgeladenen", pick: () => clips.filter(c => c.uploaded.length === 0).sort((a, b) => (b.funny ?? -1) - (a.funny ?? -1)).slice(0, 20) },
+  { key: "game", label: "Alle aus dem gewählten Spiel (oben)", pick: () => clips.filter(c => c.game === $("game").value && c.uploaded.length === 0) },
+  { key: "all", label: "Wirklich alle", pick: () => clips },
+];
+
+function toggleOffline() {
+  const p = $("offlinePanel");
+  p.classList.toggle("hidden");
+  if (p.classList.contains("hidden")) return;
+  $("offlineMode").innerHTML = offlineModes.map(m => {
+    const list = m.pick();
+    return `<option value="${m.key}">${esc(m.label)}: ${list.length} Clips, ${gb(list.reduce((a, c) => a + (c.size || 0), 0))}</option>`;
+  }).join("");
+  let info = {};
+  try { info = JSON.parse(UCutApp.offlineInfo()); } catch (e) { }
+  $("offlineInfo").textContent = info.count
+    ? `Auf dem Tablet: ${info.count} Clips (${gb(info.bytes)}), geladen am ${new Date(info.at).toLocaleString("de-DE")}. Frei: ${gb(info.free)}.`
+    : `Noch keine Clips auf dem Tablet. Frei: ${gb(info.free || 0)}.`;
+}
+
+function startOffline() {
+  const m = offlineModes.find(x => x.key === $("offlineMode").value);
+  const ids = m.pick().map(c => c.id);
+  if (ids.length === 0) { toast("Keine Clips in dieser Auswahl."); return; }
+  UCutApp.syncOffline(JSON.stringify(ids));
+}
+
+function clearOffline() {
+  UCutApp.clearOffline();
+  toggleOffline(); toggleOffline();
 }
 
 // Called by the app after sharing.
