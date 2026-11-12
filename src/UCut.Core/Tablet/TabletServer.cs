@@ -107,7 +107,9 @@ public sealed class TabletServer(Func<UCutSettings> settings, TimeProvider? time
         if (_app is { } app)
         {
             _app = null;
-            await app.StopAsync().ConfigureAwait(false);
+            // An open video stream to the tablet would otherwise hold UCut open for up to 30 seconds after closing.
+            using var quick = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            await app.StopAsync(quick.Token).ConfigureAwait(false);
             await app.DisposeAsync().ConfigureAwait(false);
         }
     }

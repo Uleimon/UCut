@@ -80,6 +80,7 @@ public partial class App : Application
 
         _main = new MainViewModel(settingsPath, new WpfDialogs(), Dispatcher) { AutoInstallTools = !_selfTest };
         var window = new MainWindow { DataContext = _main };
+        window.Closing += (_, _) => StopMedia(window);
         window.Show();
         _main.Library.Refresh();
         _ = _main.CheckToolsAsync();
@@ -215,6 +216,22 @@ public partial class App : Application
         {
             Console.Error.WriteLine(ex);
             Shutdown(3);
+        }
+    }
+
+    /// <summary>Silences every player at once when the window closes (a playing clip went on to the end before).</summary>
+    private static void StopMedia(DependencyObject parent)
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is System.Windows.Controls.MediaElement media)
+            {
+                media.Stop();
+                media.Close();
+            }
+
+            StopMedia(child);
         }
     }
 
