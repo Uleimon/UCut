@@ -37,6 +37,9 @@ public sealed record ProcessOptions
 
     /// <summary>Existing clip file to replace (same name and folder).</summary>
     public string? ReplacePath { get; init; }
+
+    /// <summary>No transcript now (Instant Clip off): faster, the clip is marked so the subtitles can follow later.</summary>
+    public bool SkipTranscript { get; init; }
 }
 
 /// <summary>One clip from start to finish: transcript, cut, captions, logo, score, texts, info file.</summary>
@@ -65,9 +68,14 @@ public sealed class ClipPipeline(
             var info = await ffmpeg.ProbeAsync(sourceFile, ct).ConfigureAwait(false);
 
             var transcript = new Transcript([]);
+            var skipTranscript = options is { SkipTranscript: true, Words: null };
             if (options?.Words is not null)
             {
                 log("  Korrigierte Untertitel werden verwendet");
+            }
+            else if (skipTranscript)
+            {
+                log("  Instant Clip ist aus: ohne Transkript geschnitten, Untertitel später in der Galerie nachholen");
             }
             else if (info.HasAudio)
             {
@@ -188,6 +196,7 @@ public sealed class ClipPipeline(
                 };
             }
 
+            meta.SubtitlesPending = skipTranscript && info.HasAudio;
             meta.Laughs = [.. laughs.Moments];
             meta.Layout = new LayoutInfo { Status = layout.Status, CamEdge = layout.CamEdge, Notes = [.. layout.Notes] };
             meta.Edit = new EditInfo

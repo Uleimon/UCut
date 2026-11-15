@@ -55,6 +55,18 @@
 
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
+                        <TextBlock Style="{StaticResource H2}" Text="Instant Clip (Untertitel sofort)"/>
+                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
+                                   Text="Haken drin: der Clip bekommt gleich Untertitel (dauert pro Clip deutlich länger). Haken raus: der Clip wird ohne Untertitel sofort fertig geschnitten. Die Untertitel holst du später in der Galerie nach („Untertitel jetzt erstellen“)."/>
+                        <TextBlock Style="{StaticResource Field}" Text="Aitum Vertical (Clips aus OBS, überwachter Ordner)"/>
+                        <CheckBox Content="Instant Clip: sofort mit Untertiteln" IsChecked="{Binding InstantWatch}"/>
+                        <TextBlock Style="{StaticResource Field}" Text="Reingeholte Clips (Hinzufügen und Twitch-Import)"/>
+                        <CheckBox Content="Instant Clip: sofort mit Untertiteln" IsChecked="{Binding InstantImport}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
                         <TextBlock Style="{StaticResource H2}" Text="Twitch"/>
                         <TextBlock Style="{StaticResource Field}" Text="Kanal"/>
                         <TextBox Text="{Binding TwitchChannel}"/>

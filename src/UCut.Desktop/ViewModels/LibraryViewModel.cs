@@ -28,6 +28,7 @@ internal sealed class ClipCard(LibraryClip clip) : ObservableObject
         var n => $"{n} Lacher erkannt (bei {string.Join(", ", Clip.Metadata.Laughs.Select(l => l.ToString("0.0", System.Globalization.CultureInfo.GetCultureInfo("de-DE"))))} s)",
     };
     public bool HasYouTubeThumbnail => File.Exists(Clip.YouTubeThumbnailPath);
+    public bool SubtitlesPending => Clip.Metadata.SubtitlesPending;
     public string SourceText => Clip.Metadata.Origin is { } o ? $"{o.Platform}-Clip · {o.Views} Aufrufe" : "Aufnahme";
     public string Layout => Clip.Metadata.Layout?.Status ?? "";
     public string Transcript => Clip.Metadata.Transcript;
@@ -236,6 +237,8 @@ internal sealed class LibraryViewModel : ObservableObject
         }, _ => Selected is not null);
         RedoCommand = new RelayCommand(_ => Redo(), _ => Selected is not null && !_main.JobRunning);
         RecreateAllCommand = new RelayCommand(_ => RecreateAll(), _ => Clips.Count > 0 && !_main.JobRunning);
+        SubtitlesNowCommand = new RelayCommand(_ => { if (Selected is { SubtitlesPending: true } c) { AddSubtitles([c]); } }, _ => Selected is { SubtitlesPending: true } && !_main.JobRunning);
+        SubtitlesAllCommand = new RelayCommand(_ => AddSubtitles(_all.Where(c => c.SubtitlesPending).ToList()), _ => HasPendingSubtitles && !_main.JobRunning);
         UploadNowCommand = new AsyncCommand(UploadNowAsync, () => Selected is not null && !_main.JobRunning && UploadTargets.Any(t => t.IsChecked));
         ManageAccountsCommand = new RelayCommand(_ => _main.Page = "settings");
         ClearUploadFolderCommand = new RelayCommand(_ =>
@@ -278,6 +281,10 @@ internal sealed class LibraryViewModel : ObservableObject
     public RelayCommand UploadCommand { get; }
     public RelayCommand RedoCommand { get; }
     public RelayCommand RecreateAllCommand { get; }
+    public RelayCommand SubtitlesNowCommand { get; }
+    public RelayCommand SubtitlesAllCommand { get; }
+    public bool HasPendingSubtitles => _all.Any(c => c.SubtitlesPending);
+    public string PendingSubtitlesText => $"Untertitel nachholen ({_all.Count(c => c.SubtitlesPending)})";
     public RelayCommand ClearUploadFolderCommand { get; }
     private bool _hideUploadHint;
     public RelayCommand OpenUploadFolderCommand { get; }
@@ -383,6 +390,34 @@ internal sealed class LibraryViewModel : ObservableObject
         });
     }
 
+    /// <summary>Clips made with Instant Clip off get their subtitles now; cut, layout and texts stay.</summary>
+    private void AddSubtitles(List<ClipCard> cards)
+    {
+        if (cards.Count == 0)
+        {
+            return;
+        }
+
+        SaveSelected();
+        var engine = _main.Engine;
+        var clips = cards.Select(c => c.Clip).ToList();
+        Selected = null; // the player lets go of the video, so it can be overwritten
+        _ = _main.RunJobAsync($"Untertitel für {clips.Count} Clip(s)", (progress, ct) => engine.AddSubtitlesAsync(clips, progress, ct), r =>
+        {
+            foreach (var c in cards)
+            {
+                _all.Remove(c);
+            }
+
+            Refresh();
+            if (cards.Count > 1)
+            {
+                _main.Dialogs.Info("Untertitel", $"{r.Done} Clip(s) haben jetzt Untertitel" + (r.Failed > 0 ? $", {r.Failed} gingen nicht (siehe Protokoll)." : ".")
+                                                 + (r.Cancelled ? "\nAbgebrochen, der Rest bleibt ohne Untertitel." : ""));
+            }
+        });
+    }
+
     private void Redo()
     {
         if (Selected is not { } card)
@@ -438,6 +473,8 @@ internal sealed class LibraryViewModel : ObservableObject
         ApplyFilter();
         Selected = selectedPath is null ? null : Clips.FirstOrDefault(c => string.Equals(c.Clip.VideoPath, selectedPath, StringComparison.OrdinalIgnoreCase));
         OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(HasPendingSubtitles));
+        OnPropertyChanged(nameof(PendingSubtitlesText));
         RefreshTargets();
         _ = LoadThumbnailsAsync(++_loadGeneration);
     }

@@ -48,6 +48,15 @@ public sealed class WhisperSettings
 
     /// <summary>Spoken language ("de", "en", ...) or "auto".</summary>
     public string Language { get; set; } = "de";
+
+    /// <summary>
+    /// "Instant Clip" for clips from the watched folder (Aitum Vertical): true = subtitles right away,
+    /// false = cut without a transcript (much faster), subtitles can be made later in the gallery.
+    /// </summary>
+    public bool InstantWatch { get; set; } = true;
+
+    /// <summary>Same for clips added by hand and Twitch imports.</summary>
+    public bool InstantImport { get; set; } = true;
 }
 
 public sealed class CaptionSettings

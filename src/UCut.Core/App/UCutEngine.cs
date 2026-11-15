@@ -145,7 +145,9 @@ public sealed class UCutEngine : IDisposable
             try
             {
                 var game = await ClipImport.ChooseGameAsync(file, gameOverride, Settings.Games, Games, DateTime.Now).ConfigureAwait(false);
-                ClipFinished?.Invoke(await Pipeline.ProcessAsync(file, game, ct: ct).ConfigureAwait(false));
+                // Not inside ?.Invoke(...): without a listener the clip would not be made at all.
+                var finished = await Pipeline.ProcessAsync(file, game, null, Instant(Settings.Whisper.InstantImport), ct).ConfigureAwait(false);
+                ClipFinished?.Invoke(finished);
                 done++;
             }
             catch (Exception ex) when (IsClipError(ex, ct))
@@ -182,7 +184,9 @@ public sealed class UCutEngine : IDisposable
                 try
                 {
                     var game = detected.TryRemove(file, out var t) ? await t.ConfigureAwait(false) : await Games.DetectAsync(ct).ConfigureAwait(false);
-                    ClipFinished?.Invoke(await Pipeline.ProcessAsync(file, game, ct: ct).ConfigureAwait(false));
+                    // Not inside ?.Invoke(...): without a listener the clip would not be made at all.
+                    var finished = await Pipeline.ProcessAsync(file, game, null, Instant(Settings.Whisper.InstantWatch), ct).ConfigureAwait(false);
+                    ClipFinished?.Invoke(finished);
                 }
                 catch (Exception ex) when (IsClipError(ex, ct))
                 {
@@ -296,6 +300,44 @@ public sealed class UCutEngine : IDisposable
         return new BatchResult(done, failed, false);
     }
 
+    private static ProcessOptions? Instant(bool instant) => instant ? null : new ProcessOptions { SkipTranscript = true };
+
+    /// <summary>
+    /// Subtitles for clips made with Instant Clip off: same cut, layout and texts, now with a transcript.
+    /// One failed clip does not stop the others.
+    /// </summary>
+    public async Task<BatchResult> AddSubtitlesAsync(IReadOnlyList<UCut.Library.LibraryClip> clips, IProgress<BatchProgress>? progress = null, CancellationToken ct = default)
+    {
+        var done = 0;
+        var failed = 0;
+        for (var i = 0; i < clips.Count; i++)
+        {
+            if (ct.IsCancellationRequested)
+            {
+                return Finish(done, failed, clips.Count, ct, progress);
+            }
+
+            var clip = clips[i];
+            progress?.Report(new BatchProgress(i, clips.Count, clip.Title));
+            try
+            {
+                await RedoAsync(clip, SameAsBefore(clip.Metadata) with { Words = null }, ct).ConfigureAwait(false);
+                done++;
+            }
+            catch (Exception ex) when (IsClipError(ex, ct))
+            {
+                failed++;
+                Log.Write($"\"{clip.Title}\": Untertitel gingen nicht: {ex.Message}");
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
+            }
+        }
+
+        return Finish(done, failed, clips.Count, ct, progress);
+    }
+
     /// <summary>Options that rebuild a clip the way it was made last time.</summary>
     public static ProcessOptions SameAsBefore(UCut.Metadata.ClipMetadata meta)
     {
@@ -345,7 +387,7 @@ public sealed class UCutEngine : IDisposable
                     ? new GameResult(GameDetector.ToFolderName(raw, Settings.Games), raw, "Twitch-Clip")
                     : new GameResult(Settings.Games.UnknownFolder, null, "Twitch-Clip");
                 var origin = new ClipOrigin(clip.CreatedAt, "Twitch", clip.Id, clip.Url, clip.Title, clip.ViewCount);
-                var result = await Pipeline.ProcessAsync(file, game, origin, ct).ConfigureAwait(false);
+                var result = await Pipeline.ProcessAsync(file, game, origin, Instant(Settings.Whisper.InstantImport), ct).ConfigureAwait(false);
                 archive.Add(new ArchivedClip
                 {
                     Id = clip.Id, Url = clip.Url, Title = clip.Title, Views = clip.ViewCount, CreatedAt = clip.CreatedAt,

@@ -15,7 +15,7 @@ Sobald Aitum Vertical einen Clip speichert, passiert Folgendes:
 
 ## Das Programm
 
-`UCut-Setup-0.6.5.exe` installiert UCut wie ein normales Programm (ohne Admin-Rechte, nach `%LOCALAPPDATA%\Programs\UCut`), mit eigenem Icon im Startmenü und auf dem Desktop. Eine neue Version einfach drüber installieren: das Setup schließt UCut, ersetzt den Programmordner komplett und lässt Einstellungen, Konten und Clips in Ruhe. Deinstallieren geht über *Einstellungen → Apps*.
+`UCut-Setup-0.7.0.exe` installiert UCut wie ein normales Programm (ohne Admin-Rechte, nach `%LOCALAPPDATA%\Programs\UCut`), mit eigenem Icon im Startmenü und auf dem Desktop. Eine neue Version einfach drüber installieren: das Setup schließt UCut, ersetzt den Programmordner komplett und lässt Einstellungen, Konten und Clips in Ruhe. Deinstallieren geht über *Einstellungen → Apps*.
 
 Fehlen ffmpeg oder yt-dlp, lädt UCut sie beim Start selbst nach `%LOCALAPPDATA%\UCut\tools` (einmalig, ohne Admin-Rechte).
 
@@ -45,6 +45,7 @@ UCut prüft dabei jeden Clip:
 - **Toter Anfang:** wird wie immer weggeschnitten.
 - **Querformat oder Quadrat:** wird automatisch ins Hochformat 1080x1920 gebracht. Standard ist `split`: UCut sucht den Cam-Ausschnitt im Bild (ein fester Rahmen, in dem sich etwas bewegt und Hautfarbe zu sehen ist), setzt die Cam oben über die ganze Breite und das Spiel darunter. Das Uleimon-Logo kommt unten an die Cam. Findet UCut keine Cam, greift `reframe.fallbackMode`: `crop` (Bild füllt den Bildschirm, die Seiten werden abgeschnitten) oder `blur` (ganzes Bild in der Mitte, unscharfer Hintergrund). Liegt die Cam immer an derselben Stelle, kann man sie fest eintragen, dann wird nicht gesucht: `"reframe": { "camRect": { "x": 0.74, "y": 0.72, "width": 0.26, "height": 0.26 } }` (Anteile vom Bild, 0 bis 1). `reframe.maxCamHeight` begrenzt, wie viel Platz die Cam oben bekommt (Standard 0,45 = 45 %). `reframe.focusX` bestimmt, welcher Teil vom Spiel bleibt (0 = links, 0,5 = Mitte, 1 = rechts). Mit `"mode": "crop"` oder `"blur"` wird die Cam-Suche ganz ausgeschaltet.
 - **Hochformat:** bleibt wie es ist.
+- **Instant Clip:** In den Einstellungen getrennt für Aitum Vertical (`whisper.instantWatch`) und für reingeholte Clips (`whisper.instantImport`). Aus = ohne Transkript sofort geschnitten (viel schneller), die Untertitel kommen später über *Untertitel jetzt erstellen* bzw. *Untertitel nachholen* in der Galerie, mit gleichem Schnitt und gleichen Texten.
 - **Spiel:** Ein frischer Clip (jünger als 15 Minuten) bekommt das Spiel, das gerade läuft. Ältere Clips landen in `Unsortiert`, außer du gibst `--game` an.
 
 ## Alte Twitch-Clips laden

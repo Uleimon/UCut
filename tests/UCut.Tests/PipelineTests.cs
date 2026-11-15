@@ -174,3 +174,63 @@ public class PipelineTests
         }
     }
 }
+
+public class InstantClipTests
+{
+    private sealed class CountingTranscriber(Transcript t) : ITranscriber
+    {
+        public int Calls { get; private set; }
+
+        public Task<Transcript> TranscribeAsync(string wav16kMono, CancellationToken ct = default)
+        {
+            Calls++;
+            return Task.FromResult(t);
+        }
+    }
+
+    [Fact]
+    public async Task Ohne_Instant_Clip_erst_ohne_Untertitel_dann_nachgeholt_mit_gleichem_Schnitt()
+    {
+        Assert.SkipUnless(EffectsTestsHelper.HasFfmpeg(), "ffmpeg nicht installiert");
+        var dir = Directory.CreateTempSubdirectory("ucut-instant-");
+        try
+        {
+            var input = Path.Combine(dir.FullName, "replay.mp4");
+            await ProcessRunner.RunCheckedAsync("ffmpeg",
+            [
+                "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=540x960:rate=30:duration=6",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=6", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", input,
+            ]);
+            var settings = new UCutSettings { OutputFolder = Path.Combine(dir.FullName, "out") };
+            settings.Logo.Path = Path.Combine(AppContext.BaseDirectory, "assets", "uleimon-logo.png");
+            settings.Captions.Font = "DejaVu Sans";
+            settings.Whisper.InstantImport = false;
+            // Speech starts late: with a transcript the dead start would be cut away.
+            var transcriber = new CountingTranscriber(new Transcript([new Word("Wer", 3.0, 3.3), new Word("hat", 3.3, 3.5), new Word("Kredit?", 3.5, 4.0)]));
+            using var engine = new UCut.App.UCutEngine(settings, new UCut.App.RunLog(), transcriber: transcriber, writer: new TemplateClipWriter());
+
+            var r = await engine.ProcessFilesAsync([input], "GTA V", null, TestContext.Current.CancellationToken);
+            Assert.Equal(1, r.Done);
+            Assert.Equal(0, transcriber.Calls);
+            var clip = Assert.Single(UCut.Library.ClipLibrary.Load(settings.OutputFolder));
+            Assert.True(clip.Metadata.SubtitlesPending);
+            Assert.Empty(clip.Metadata.Edit!.Words);
+            Assert.Equal(0, clip.Metadata.Edit.CutStart);
+            var title = clip.Metadata.YouTube.Title;
+
+            var s = await engine.AddSubtitlesAsync([clip], null, TestContext.Current.CancellationToken);
+            Assert.Equal(1, s.Done);
+            Assert.Equal(1, transcriber.Calls);
+            var after = Assert.Single(UCut.Library.ClipLibrary.Load(settings.OutputFolder));
+            Assert.False(after.Metadata.SubtitlesPending);
+            Assert.Equal(3, after.Metadata.Edit!.Words.Count);
+            Assert.Equal(0, after.Metadata.Edit.CutStart); // same cut as before
+            Assert.Equal(clip.VideoPath, after.VideoPath);
+            Assert.Equal(title, after.Metadata.YouTube.Title);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+}

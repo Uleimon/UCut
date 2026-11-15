@@ -171,6 +171,8 @@ internal sealed class SettingsViewModel : ObservableObject
     }
 
     public string Language { get => _s.Whisper.Language; set { _s.Whisper.Language = value.Trim(); OnPropertyChanged(); } }
+    public bool InstantWatch { get => _s.Whisper.InstantWatch; set { _s.Whisper.InstantWatch = value; OnPropertyChanged(); } }
+    public bool InstantImport { get => _s.Whisper.InstantImport; set { _s.Whisper.InstantImport = value; OnPropertyChanged(); } }
 
     public IReadOnlyList<Choice<ReframeMode>> ReframeModes { get; } =
         [new(UCut.Editing.ReframeMode.Split, "Cam oben, Spiel unten (Cam wird gesucht)"), new(UCut.Editing.ReframeMode.Crop, "Zuschneiden (Mitte)"), new(UCut.Editing.ReframeMode.Blur, "Ganzes Bild, unscharfer Hintergrund")];

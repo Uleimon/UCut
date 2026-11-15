@@ -32,6 +32,13 @@
                     </Border>
                     <Button Style="{StaticResource IconButton}" Content="&#xE72C;" ToolTip="Neu laden" Command="{Binding RefreshCommand}"/>
                     <Button Style="{StaticResource IconButton}" Content="&#xE838;" ToolTip="Ausgabeordner öffnen" Command="{Binding OpenOutputCommand}"/>
+                    <Button Command="{Binding SubtitlesAllCommand}" Margin="0,0,8,0" Visibility="{Binding HasPendingSubtitles, Converter={StaticResource BoolToVis}}"
+                            ToolTip="Clips, die ohne Instant Clip (ohne Untertitel) gemacht wurden, bekommen jetzt ihre Untertitel. Schnitt und Texte bleiben.">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xED1E;" Style="{StaticResource Icon}" Margin="0,0,8,0"/>
+                            <TextBlock Text="{Binding PendingSubtitlesText}"/>
+                        </StackPanel>
+                    </Button>
                     <Button Command="{Binding RecreateAllCommand}" Margin="0,0,8,0"
                             ToolTip="Alle angezeigten Clips genau wie vorher neu rendern (Filter nach Spiel wirkt mit)">
                         <StackPanel Orientation="Horizontal">
@@ -148,6 +155,10 @@
                                     <Border Style="{StaticResource Chip}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8">
                                         <TextBlock Text="{Binding DurationText}" FontSize="11"/>
                                     </Border>
+                                    <Border Style="{StaticResource Chip}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="8" ToolTip="Ohne Untertitel gemacht (Instant Clip aus)"
+                                            Visibility="{Binding SubtitlesPending, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="ohne Untertitel" FontSize="11" Foreground="{StaticResource WarnBrush}"/>
+                                    </Border>
                                     <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Width="26" Height="26" CornerRadius="13"
                                             Background="{StaticResource OkBrush}" ToolTip="{Binding UploadedPlatforms}"
                                             Visibility="{Binding IsUploaded, Converter={StaticResource BoolToVis}}">
@@ -204,6 +215,13 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE8C6;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/>
                                 <TextBlock Text="Im Schnittraum bearbeiten" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding SubtitlesNowCommand}" Margin="0,0,8,8" Visibility="{Binding Selected.SubtitlesPending, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}"
+                                ToolTip="Dieser Clip wurde ohne Untertitel gemacht (Instant Clip aus). Jetzt transkribieren, Schnitt und Texte bleiben.">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xED1E;" Style="{StaticResource Icon}" Margin="0,0,8,0"/>
+                                <TextBlock Text="Untertitel jetzt erstellen"/>
                             </StackPanel>
                         </Button>
                         <Button Command="{Binding RedoCommand}" Margin="0,0,8,8" ToolTip="Cam von Hand setzen, ohne Cam machen oder Untertitel korrigieren">

@@ -20,6 +20,9 @@ public sealed class ClipMetadata
     public string? CutNote { get; set; }
     public string Transcript { get; set; } = "";
 
+    /// <summary>Made without a transcript (Instant Clip off): the subtitles can still be made later.</summary>
+    public bool SubtitlesPending { get; set; }
+
     /// <summary>Seconds (from the clip start) where someone laughs.</summary>
     public List<double> Laughs { get; set; } = [];
     public ScoreInfo Score { get; set; } = new();
