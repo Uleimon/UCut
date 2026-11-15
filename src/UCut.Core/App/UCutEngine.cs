@@ -164,6 +164,29 @@ public sealed class UCutEngine : IDisposable
         return Finish(done, failed, files.Count, ct, progress);
     }
 
+    /// <summary>
+    /// Videos in the Aitum folder since <see cref="UCutSettings.WatchSince"/> that have no finished clip yet, oldest first.
+    /// </summary>
+    public IReadOnlyList<string> MissedAitumClips()
+    {
+        if (Settings.WatchSince is not { } since || !Directory.Exists(Settings.WatchFolder))
+        {
+            return [];
+        }
+
+        var done = UCut.Library.ClipLibrary.Load(Settings.OutputFolder)
+            .Select(c => c.Metadata.SourceFile)
+            .Where(s => s.Length > 0)
+            .Select(Path.GetFullPath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return Directory.EnumerateFiles(Settings.WatchFolder)
+            .Where(ClipImport.IsVideo)
+            .Select(Path.GetFullPath)
+            .Where(f => !done.Contains(f) && File.GetLastWriteTimeUtc(f) >= since.UtcDateTime)
+            .OrderBy(File.GetLastWriteTimeUtc)
+            .ToList();
+    }
+
     /// <summary>Watches the Aitum folder until cancelled. The game is detected the moment a clip appears.</summary>
     public async Task WatchAsync(CancellationToken ct)
     {
@@ -176,11 +199,45 @@ public sealed class UCutEngine : IDisposable
         using var watcher = new ClipWatcher(Settings.WatchFolder, Log.Write);
         watcher.FileAppeared += path => detected.TryAdd(path, Games.DetectAsync(ct));
         watcher.Start();
-        Log.Write("Bereit. Neue Clips werden automatisch verarbeitet.");
+        var made = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         try
         {
+            // Clips Aitum saved while UCut was closed or "Auto" was off.
+            var missed = MissedAitumClips();
+            if (missed.Count > 0)
+            {
+                Log.Write($"{missed.Count} Aitum-Clip(s) von vorher werden nachgeholt.");
+            }
+
+            foreach (var file in missed)
+            {
+                ct.ThrowIfCancellationRequested();
+                made.Add(file);
+                try
+                {
+                    if (!await ClipWatcher.WaitUntilCompleteAsync(file, TimeSpan.FromSeconds(2), ct).ConfigureAwait(false))
+                    {
+                        continue;
+                    }
+
+                    var game = await ClipImport.ChooseGameAsync(file, null, Settings.Games, Games, DateTime.Now).ConfigureAwait(false);
+                    var finished = await Pipeline.ProcessAsync(file, game, null, Instant(Settings.Whisper.InstantWatch), ct).ConfigureAwait(false);
+                    ClipFinished?.Invoke(finished);
+                }
+                catch (Exception ex) when (IsClipError(ex, ct))
+                {
+                    Log.Write($"Fehler bei {Path.GetFileName(file)}: {ex.Message}");
+                }
+            }
+
+            Log.Write("Bereit. Neue Clips werden automatisch verarbeitet.");
             await foreach (var file in watcher.ReadFinishedAsync(ct).ConfigureAwait(false))
             {
+                if (!made.Add(Path.GetFullPath(file)))
+                {
+                    continue;
+                }
+
                 try
                 {
                     var game = detected.TryRemove(file, out var t) ? await t.ConfigureAwait(false) : await Games.DetectAsync(ct).ConfigureAwait(false);

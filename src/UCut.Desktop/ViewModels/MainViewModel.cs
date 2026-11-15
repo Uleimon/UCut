@@ -47,6 +47,11 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
         Tablet = new UCut.Tablet.TabletServer(() => Engine.Settings);
         Tablet.ClipsChanged += () => _ui.BeginInvoke(() => Library.Refresh());
         _ = _ui.BeginInvoke(() => _ = ApplyTabletAsync(), DispatcherPriority.Background);
+        if (Engine.Settings.AutoWatch)
+        {
+            // "Auto" was on last time: on again, and Aitum clips made in between are caught up.
+            _ = _ui.BeginInvoke(() => IsWatching = true, DispatcherPriority.Background);
+        }
 
         NavigateCommand = new RelayCommand(p => Page = p?.ToString() ?? "library");
         CancelJobCommand = new RelayCommand(_ => _jobCts?.Cancel(), _ => JobRunning);
@@ -190,6 +195,8 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
             {
                 _watchCts?.Cancel();
             }
+
+            RememberAutoWatch(value && _isWatching);
         }
     }
 
@@ -311,6 +318,29 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
             Settings.ReloadCommand.Execute(null);
         }
         catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException)
+        {
+            Log.Write($"Einstellung nicht gespeichert: {ex.Message}");
+        }
+    }
+
+    /// <summary>Saves whether "Auto" is on (so it comes back after a restart) and from when missed Aitum clips are caught up.</summary>
+    private void RememberAutoWatch(bool on)
+    {
+        try
+        {
+            var s = SettingsStore.Load(SettingsPath);
+            s.AutoWatch = on;
+            if (on && s.WatchSince is null)
+            {
+                // First time: today's clips still count, older ones are left alone.
+                s.WatchSince = DateTimeOffset.Now.Date;
+            }
+
+            SettingsStore.Save(s, SettingsPath);
+            Engine.Settings.AutoWatch = s.AutoWatch;
+            Engine.Settings.WatchSince = s.WatchSince;
+        }
+        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
         {
             Log.Write($"Einstellung nicht gespeichert: {ex.Message}");
         }

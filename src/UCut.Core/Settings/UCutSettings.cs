@@ -9,6 +9,15 @@ public sealed class UCutSettings
     /// <summary>Folder where Aitum Vertical (or OBS) saves the vertical replays/clips.</summary>
     public string WatchFolder { get; set; } = "";
 
+    /// <summary>"Auto" (watch the Aitum folder) was on when UCut was closed: switch it on again at start.</summary>
+    public bool AutoWatch { get; set; }
+
+    /// <summary>
+    /// Aitum clips from this time on are made even if UCut was closed or "Auto" was off when they were recorded.
+    /// Set the first time "Auto" is switched on, so years of old clips are not all made at once.
+    /// </summary>
+    public DateTimeOffset? WatchSince { get; set; }
+
     /// <summary>Root folder for finished clips. Every clip lands in a subfolder named after the game.</summary>
     public string OutputFolder { get; set; } = "";
 

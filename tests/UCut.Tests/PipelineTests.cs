@@ -234,3 +234,53 @@ public class InstantClipTests
         }
     }
 }
+
+public class MissedAitumClipTests
+{
+    [Fact]
+    public void Nur_Clips_seit_dem_Start_ohne_fertigen_Clip_werden_nachgeholt()
+    {
+        var dir = Directory.CreateTempSubdirectory("ucut-missed-").FullName;
+        try
+        {
+            var watch = Path.Combine(dir, "aitum");
+            Directory.CreateDirectory(watch);
+            var old = Path.Combine(watch, "alt.mp4");
+            var made = Path.Combine(watch, "schon-fertig.mp4");
+            var missed2 = Path.Combine(watch, "verpasst-2.mp4");
+            var missed1 = Path.Combine(watch, "verpasst-1.mp4");
+            foreach (var f in new[] { old, made, missed1, missed2 })
+            {
+                File.WriteAllText(f, "x");
+            }
+
+            File.WriteAllText(Path.Combine(watch, "notiz.txt"), "x");
+            var since = new DateTime(2026, 11, 15, 0, 0, 0, DateTimeKind.Utc);
+            File.SetLastWriteTimeUtc(old, since.AddDays(-3));
+            File.SetLastWriteTimeUtc(made, since.AddHours(1));
+            File.SetLastWriteTimeUtc(missed1, since.AddHours(2));
+            File.SetLastWriteTimeUtc(missed2, since.AddHours(3));
+
+            var settings = new UCutSettings { WatchFolder = watch, OutputFolder = Path.Combine(dir, "out"), WatchSince = since };
+            var gameDir = Path.Combine(settings.OutputFolder, "GTA V");
+            Directory.CreateDirectory(gameDir);
+            File.WriteAllText(Path.Combine(gameDir, "clip.mp4"), "x");
+            new ClipMetadata { Video = "clip.mp4", SourceFile = made, Game = "GTA V" }.Save(Path.Combine(gameDir, "clip.json"));
+
+            using var engine = new UCut.App.UCutEngine(settings, new UCut.App.RunLog(), transcriber: new NoTranscriber(), writer: new TemplateClipWriter());
+            Assert.Equal([Path.GetFullPath(missed1), Path.GetFullPath(missed2)], engine.MissedAitumClips());
+
+            settings.WatchSince = null;
+            Assert.Empty(engine.MissedAitumClips());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    private sealed class NoTranscriber : ITranscriber
+    {
+        public Task<Transcript> TranscribeAsync(string wav16kMono, CancellationToken ct = default) => Task.FromResult(new Transcript([]));
+    }
+}
