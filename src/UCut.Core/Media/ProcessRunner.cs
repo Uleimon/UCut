@@ -29,6 +29,7 @@ public static class ProcessRunner
         try
         {
             process.Start();
+            Gentle.Lower(process);
         }
         catch (System.ComponentModel.Win32Exception ex)
         {

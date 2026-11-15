@@ -80,7 +80,7 @@ public static class RenderCommand
             args.AddRange(["-filter_complex", string.Join(';', filters), "-map", current, "-map", "0:a?"]);
         }
 
-        args.AddRange(["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+        args.AddRange(["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-threads", UCut.Media.Gentle.EncoderThreads, "-pix_fmt", "yuv420p",
                        "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", job.Output]);
         return args;
     }

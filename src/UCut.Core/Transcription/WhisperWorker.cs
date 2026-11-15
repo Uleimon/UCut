@@ -28,6 +28,7 @@ public static class WhisperWorker
             return 2;
         }
 
+        UCut.Media.Gentle.BackgroundModeForThisProcess();
         var request = JsonSerializer.Deserialize<Request>(File.ReadAllText(args[1]), Json)
             ?? throw new InvalidDataException("Leere Anfrage");
         var settings = new WhisperSettings { Model = request.Model, ModelFolder = request.ModelFolder, Language = request.Language };
@@ -52,6 +53,7 @@ public static class WhisperWorker
             info.ArgumentList.Add(requestPath);
             info.ArgumentList.Add(resultPath);
             using var process = Process.Start(info) ?? throw new InvalidOperationException("Untertitel-Erkennung konnte nicht gestartet werden.");
+            UCut.Media.Gentle.Lower(process);
             try
             {
                 await process.WaitForExitAsync(ct).ConfigureAwait(false);

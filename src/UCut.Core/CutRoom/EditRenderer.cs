@@ -179,7 +179,7 @@ public static class EditRenderer
                 args.AddRange(["-map", "[aout]", "-c:a", "aac", "-b:a", $"{o.AudioKbps}k"]);
             }
 
-            args.AddRange(["-c:v", "libx264", "-preset", preset, "-crf", crf, "-movflags", "+faststart"]);
+            args.AddRange(["-c:v", "libx264", "-preset", preset, "-crf", crf, "-threads", UCut.Media.Gentle.EncoderThreads, "-movflags", "+faststart"]);
         }
         else
         {
@@ -248,6 +248,7 @@ public static class EditRenderer
         try
         {
             proc.Start();
+            UCut.Media.Gentle.Lower(proc);
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
