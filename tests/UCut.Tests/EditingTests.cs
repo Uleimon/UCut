@@ -88,6 +88,52 @@ public class EditingTests
     }
 
     [Fact]
+    public void Mehrere_Tonspuren_werden_zu_einer_gemischt()
+    {
+        var job = new RenderJob("in.mp4", "out.mp4", new CutPlan(0, 5, null), 1080, 1920, null, null, new LogoSettings(), null, AudioTracks: 3);
+        var args = RenderCommand.Build(job);
+        var graph = args[args.IndexOf("-filter_complex") + 1];
+        Assert.Contains("[0:a:0][0:a:1][0:a:2]amix=inputs=3", graph, StringComparison.Ordinal);
+        Assert.Contains("[aout]", args);
+        Assert.Contains("0:v", args);
+        Assert.DoesNotContain("0:a?", args);
+    }
+
+    [Fact]
+    public async Task Clip_mit_stummer_erster_Tonspur_hat_trotzdem_Ton()
+    {
+        // wie Aitum Backtrack: Spur 1 fast still, Spur 2 hat den Ton, Spur 3 leer
+        var dir = Directory.CreateTempSubdirectory("ucut-mix-");
+        try
+        {
+            var src = Path.Combine(dir.FullName, "in.mp4");
+            await UCut.Media.ProcessRunner.RunCheckedAsync("ffmpeg", [
+                "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=gray:s=180x320:d=2", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+                "-map", "0:v", "-map", "1:a", "-map", "2:a", "-map", "3:a", "-t", "2", "-c:v", "libx264", "-c:a", "aac", src]);
+            var ff = new UCut.Media.Ffmpeg("ffmpeg", "ffprobe");
+            var info = await ff.ProbeAsync(src);
+            Assert.Equal(3, info.AudioTracks.Count);
+
+            var outFile = Path.Combine(dir.FullName, "out.mp4");
+            var job = new RenderJob(src, outFile, new CutPlan(0, 2, null), 180, 320, null, null, new LogoSettings(), null, AudioTracks: info.AudioTracks.Count);
+            await UCut.Media.ProcessRunner.RunCheckedAsync("ffmpeg", RenderCommand.Build(job), dir.FullName);
+
+            var outInfo = await ff.ProbeAsync(outFile);
+            Assert.Single(outInfo.AudioTracks);
+            var pcm = await ff.ReadPcmAsync(outFile, 0.2, 1.5, 8000);
+            Assert.True(pcm.Max(v => Math.Abs((int)v)) > 3000, "Ausgabe ist stumm");
+
+            var mixed = await ff.ReadPcmAsync(src, 0.2, 1.5, 8000, info.AudioTracks.Count);
+            Assert.True(mixed.Max(v => Math.Abs((int)v)) > 3000, "Mischung für Whisper ist stumm");
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void Automatische_Logo_Hoehe_ersetzt_die_feste()
     {
         var job = new RenderJob("in.mp4", "out.mp4", new CutPlan(0, 5, null), 1000, 2000, null, "logo.png",

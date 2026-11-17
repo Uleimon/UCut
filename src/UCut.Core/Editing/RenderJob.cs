@@ -15,7 +15,8 @@ public sealed record RenderJob(
     LogoSettings Logo,
     double? LogoCenterYOverride,
     ReframePlan? Reframe = null,
-    bool UseCover = true);
+    bool UseCover = true,
+    int AudioTracks = 1);
 
 public static class RenderCommand
 {
@@ -75,9 +76,17 @@ public static class RenderCommand
             current = n;
         }
 
+        var mix = job.AudioTracks > 1;
+        if (mix)
+        {
+            // several OBS tracks (mic, game, ...): one mixed track, players only play the first one
+            filters.Add(UCut.Media.Ffmpeg.MixFilter(job.AudioTracks, "[aout]"));
+        }
+
         if (filters.Count > 0)
         {
-            args.AddRange(["-filter_complex", string.Join(';', filters), "-map", current, "-map", "0:a?"]);
+            var video = current == "[0:v]" ? "0:v" : current;
+            args.AddRange(["-filter_complex", string.Join(';', filters), "-map", video, "-map", mix ? "[aout]" : "0:a?"]);
         }
 
         args.AddRange(["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-threads", UCut.Media.Gentle.EncoderThreads, "-pix_fmt", "yuv420p",

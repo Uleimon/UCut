@@ -62,9 +62,21 @@ public sealed partial class Ffmpeg(string ffmpegPath, string ffprobePath)
     }
 
     /// <summary>Extracts 16 kHz mono 16-bit WAV (the format Whisper needs).</summary>
-    public Task ExtractWhisperAudioAsync(string video, string wavOut, CancellationToken ct = default) =>
+    public Task ExtractWhisperAudioAsync(string video, string wavOut, int audioTracks = 1, CancellationToken ct = default) =>
         ProcessRunner.RunCheckedAsync(FfmpegPath,
-            ["-v", "error", "-y", "-i", video, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wavOut], ct: ct);
+            ["-v", "error", "-y", "-i", video, .. MixAudio(audioTracks), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wavOut], ct: ct);
+
+    /// <summary>
+    /// OBS / Aitum write several tracks (mic, game, music) and players only play the first one,
+    /// which may be almost silent. Several tracks are mixed into one; a single track needs nothing.
+    /// </summary>
+    public static IReadOnlyList<string> MixAudio(int audioTracks) =>
+        audioTracks > 1 ? ["-filter_complex", MixFilter(audioTracks, "[mix]"), "-map", "[mix]"] : [];
+
+    /// <summary>amix of all audio tracks of input 0 at full volume each.</summary>
+    public static string MixFilter(int audioTracks, string output) =>
+        string.Concat(Enumerable.Range(0, audioTracks).Select(i => $"[0:a:{i}]")) +
+        $"amix=inputs={audioTracks}:duration=longest:normalize=0{output}";
 
     public async Task<LoudnessProfile> MeasureLoudnessAsync(string file, CancellationToken ct = default)
     {
@@ -110,7 +122,7 @@ public sealed partial class Ffmpeg(string ffmpegPath, string ffprobePath)
     }
 
     /// <summary>Mono 16-bit samples of a stretch of the sound (for the laugh detector).</summary>
-    public async Task<short[]> ReadPcmAsync(string file, double start, double duration, int sampleRate, CancellationToken ct = default)
+    public async Task<short[]> ReadPcmAsync(string file, double start, double duration, int sampleRate, int audioTracks = 1, CancellationToken ct = default)
     {
         var tmp = Path.Combine(Path.GetTempPath(), $"ucut-pcm-{Guid.NewGuid():N}.raw");
         try
@@ -119,7 +131,7 @@ public sealed partial class Ffmpeg(string ffmpegPath, string ffprobePath)
             await ProcessRunner.RunCheckedAsync(FfmpegPath,
             [
                 "-v", "error", "-y", "-ss", start.ToString("0.###", ci), "-t", duration.ToString("0.###", ci), "-i", file,
-                "-vn", "-ac", "1", "-ar", sampleRate.ToString(ci), "-f", "s16le", tmp,
+                .. MixAudio(audioTracks), "-vn", "-ac", "1", "-ar", sampleRate.ToString(ci), "-f", "s16le", tmp,
             ], ct: ct).ConfigureAwait(false);
             var bytes = await File.ReadAllBytesAsync(tmp, ct).ConfigureAwait(false);
             var samples = new short[bytes.Length / 2];

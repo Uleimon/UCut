@@ -107,7 +107,7 @@ public static class AutoMemes
                 continue;
             }
 
-            var pcm = await ffmpeg.ReadPcmAsync(project.Source, seg.In, seg.Duration, rate, ct).ConfigureAwait(false);
+            var pcm = await ffmpeg.ReadPcmAsync(project.Source, seg.In, seg.Duration, rate, Math.Max(1, project.Tracks.Count), ct).ConfigureAwait(false);
             var laughs = LaughDetector.Detect(pcm, rate, new Transcript([]));
             var offset = project.SegmentStart(i);
             found.AddRange(laughs.Moments.Select(t => offset + t));

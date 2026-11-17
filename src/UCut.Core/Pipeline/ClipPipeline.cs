@@ -80,7 +80,7 @@ public sealed class ClipPipeline(
             else if (info.HasAudio)
             {
                 var wav = Path.Combine(work.FullName, "audio.wav");
-                await ffmpeg.ExtractWhisperAudioAsync(sourceFile, wav, ct).ConfigureAwait(false);
+                await ffmpeg.ExtractWhisperAudioAsync(sourceFile, wav, info.AudioTracks.Count, ct).ConfigureAwait(false);
                 log("  Transkript wird erstellt ...");
                 transcript = await transcriber.TranscribeAsync(wav, ct).ConfigureAwait(false);
                 log($"  Transkript: {(transcript.Words.Count == 0 ? "(keine Sprache)" : transcript.Text)}");
@@ -135,7 +135,7 @@ public sealed class ClipPipeline(
                 await File.WriteAllTextAsync(Path.Combine(work.FullName, assName), ass, ct).ConfigureAwait(false);
             }
 
-            var laughs = info.HasAudio ? await FindLaughsAsync(sourceFile, cut, clipTranscript, ct).ConfigureAwait(false) : LaughResult.None;
+            var laughs = info.HasAudio ? await FindLaughsAsync(sourceFile, cut, clipTranscript, info.AudioTracks.Count, ct).ConfigureAwait(false) : LaughResult.None;
 
             // Text first: the title goes into the file name.
             var previous = options?.Previous;
@@ -170,7 +170,7 @@ public sealed class ClipPipeline(
             Directory.CreateDirectory(Path.GetDirectoryName(output)!);
             var tmpOut = Path.Combine(work.FullName, "out.mp4");
 
-            var job = new RenderJob(Path.GetFullPath(sourceFile), tmpOut, cut, outWidth, outHeight, assName, logoPath, settings.Logo, layout.LogoCenterY, reframe, layout.UseCover);
+            var job = new RenderJob(Path.GetFullPath(sourceFile), tmpOut, cut, outWidth, outHeight, assName, logoPath, settings.Logo, layout.LogoCenterY, reframe, layout.UseCover, info.AudioTracks.Count);
             log("  Video wird gerendert ...");
             await ProcessRunner.RunCheckedAsync(ffmpeg.FfmpegPath, RenderCommand.Build(job), work.FullName, ct).ConfigureAwait(false);
             FileRetry.Move(tmpOut, output);
@@ -228,12 +228,12 @@ public sealed class ClipPipeline(
         }
     }
 
-    private async Task<LaughResult> FindLaughsAsync(string source, CutPlan cut, Transcript clipTranscript, CancellationToken ct)
+    private async Task<LaughResult> FindLaughsAsync(string source, CutPlan cut, Transcript clipTranscript, int audioTracks, CancellationToken ct)
     {
         try
         {
             const int rate = 8000;
-            var pcm = await ffmpeg.ReadPcmAsync(source, cut.Start, cut.Duration, rate, ct).ConfigureAwait(false);
+            var pcm = await ffmpeg.ReadPcmAsync(source, cut.Start, cut.Duration, rate, audioTracks, ct).ConfigureAwait(false);
             var laughs = LaughDetector.Detect(pcm, rate, clipTranscript);
             if (laughs.Count > 0)
             {
