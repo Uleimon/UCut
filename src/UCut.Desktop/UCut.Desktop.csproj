@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>UCut</AssemblyName>
+    <RootNamespace>UCut.Desktop</RootNamespace>
+    <ApplicationIcon>Assets\ucut.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- WPF view models are internal by design. -->
+    <NoWarn>$(NoWarn);CA1515;CA1001</NoWarn>
+    <!-- WPF text layout needs real culture data. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UCut.Core\UCut.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\ucut-256.png" />
+    <None Include="..\..\assets\uleimon-logo.png" Link="assets\uleimon-logo.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

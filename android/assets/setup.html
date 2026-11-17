@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UCut verbinden</title>
+<style>
+  :root { --bg: #0d0e12; --surface: #191a21; --surface2: #22242d; --line: #2e303b; --text: #f2f3f5; --subtle: #9a9dab; --accent: #ff5a2e; --danger: #ef4444; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 system-ui, Roboto, sans-serif; }
+  main { max-width: 520px; margin: 0 auto; padding: 32px 18px; }
+  .logo { font-weight: 800; font-size: 34px; text-align: center; }
+  .logo span { color: var(--accent); }
+  .card { background: var(--surface); border-radius: 14px; padding: 16px; margin-top: 18px; }
+  h2 { font-size: 17px; margin: 0 0 10px; }
+  button { font: inherit; color: inherit; background: var(--surface2); border: 0; border-radius: 10px; padding: 12px 16px; width: 100%; margin-top: 8px; text-align: left; }
+  button.primary { background: var(--accent); color: #fff; font-weight: 600; text-align: center; }
+  input { font: inherit; color: inherit; background: var(--surface2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; width: 100%; margin-top: 6px; }
+  .row { display: grid; grid-template-columns: 1fr 110px; gap: 8px; }
+  .hint { color: var(--subtle); font-size: 14px; }
+  .err { background: #3a1416; border: 1px solid var(--danger); border-radius: 12px; padding: 12px; margin-top: 18px; }
+  ol { padding-left: 20px; margin: 6px 0 0; }
+  li { margin: 4px 0; }
+  .pc small { display: block; color: var(--subtle); }
+</style>
+</head>
+<body>
+<main>
+  <div class="logo">U<span>Cut</span></div>
+  <div id="err" class="err" style="display:none"></div>
+  <button id="retry" class="primary" style="display:none" onclick="UCutApp.retry()">Nochmal versuchen</button>
+  <button id="offline" class="primary" style="display:none" onclick="UCutApp.goOffline()">📥 Mit den Clips auf dem Tablet arbeiten (offline)</button>
+
+  <div class="card">
+    <h2>Dein PC</h2>
+    <div id="status" class="hint">Suche UCut im WLAN …</div>
+    <div id="found"></div>
+    <button onclick="search()">Nochmal suchen</button>
+  </div>
+
+  <div class="card">
+    <h2>Nicht gefunden? Adresse eintippen</h2>
+    <div class="hint">Steht am PC in UCut unter Einstellungen → Tablet-App (z. B. 192.168.178.20:53790).</div>
+    <div class="row">
+      <input id="host" placeholder="192.168.178.20" inputmode="decimal">
+      <input id="port" value="53790" inputmode="numeric">
+    </div>
+    <button class="primary" onclick="manual()">Verbinden</button>
+  </div>
+
+  <div class="card">
+    <h2>So geht's beim ersten Mal</h2>
+    <ol class="hint">
+      <li>Am PC UCut öffnen.</li>
+      <li>Links auf <b>Einstellungen</b>, bei <b>Tablet-App</b> den Haken „Tablet-App erlauben“ setzen, oben auf <b>Speichern</b>.</li>
+      <li>Fragt Windows, ob UCut ins Netzwerk darf: <b>Zulassen</b> klicken.</li>
+      <li>Hier auf „Nochmal suchen“, den PC antippen und den 6-stelligen Code eingeben, der am PC steht.</li>
+    </ol>
+  </div>
+</main>
+<script>
+"use strict";
+const params = new URLSearchParams(location.search);
+if (params.get("err")) {
+  document.getElementById("err").textContent = params.get("err");
+  document.getElementById("err").style.display = "block";
+  if (UCutApp.savedPc()) document.getElementById("retry").style.display = "block";
+}
+if (UCutApp.offlineAvailable()) document.getElementById("offline").style.display = "block";
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function search() {
+  document.getElementById("status").textContent = "Suche UCut im WLAN …";
+  document.getElementById("found").innerHTML = "";
+  setTimeout(() => {
+    let list = [];
+    try { list = JSON.parse(UCutApp.discover()); } catch (e) { }
+    document.getElementById("status").textContent = list.length
+      ? "Gefunden. Tippe auf deinen PC:"
+      : "Kein PC gefunden. Läuft UCut am PC und ist die Tablet-App dort erlaubt? Sonst unten die Adresse eintippen.";
+    document.getElementById("found").innerHTML = list.map(p =>
+      `<button class="pc" onclick="UCutApp.connect('${esc(p.host)}', ${p.port})">🖥 ${esc(p.name)}<small>${esc(p.host)}:${p.port}</small></button>`).join("");
+  }, 50);
+}
+
+function manual() {
+  let host = document.getElementById("host").value.trim();
+  let port = parseInt(document.getElementById("port").value, 10) || 53790;
+  const m = host.match(/^(.+):(\d+)$/);
+  if (m) { host = m[1]; port = parseInt(m[2], 10); }
+  if (host) UCutApp.connect(host, port);
+}
+
+search();
+</script>
+</body>
+</html>
