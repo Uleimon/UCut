@@ -26,9 +26,41 @@ public class EditingTests
     [Fact]
     public void Ohne_Sprache_wird_nur_die_Laenge_begrenzt()
     {
-        var plan = CutPlanner.Plan(90, new Transcript([]), new CutSettings { MaxLengthSeconds = 60 });
+        var plan = CutPlanner.Plan(90, new Transcript([]), new CutSettings { MaxLengthSeconds = 60, KeepEndOfLongClips = false });
         Assert.Equal(0, plan.Start);
         Assert.Equal(60, plan.End);
+    }
+
+    [Fact]
+    public void Langer_Backtrack_behaelt_das_Ende()
+    {
+        // 150 s Backtrack: der Moment ist am Schluss, nicht in der ersten Minute
+        var plan = CutPlanner.Plan(150, new Transcript([]), new CutSettings { MaxLengthSeconds = 60 });
+        Assert.Equal(90, plan.Start);
+        Assert.Equal(150, plan.End);
+        Assert.Contains("letzten", plan.Reason);
+    }
+
+    [Fact]
+    public void Langer_Clip_beginnt_am_Satzanfang_statt_mitten_im_Wort()
+    {
+        var words = new Transcript([
+            new Word("und", 89.6, 90.2),   // läuft über die 90-s-Grenze
+            new Word("dann", 90.25, 90.6), // kein Satzanfang (keine Pause)
+            new Word("Ja,", 92.0, 92.3),   // Pause davor: neuer Satz
+            new Word("da", 92.35, 92.5),
+        ]);
+        var plan = CutPlanner.Plan(150, words, new CutSettings { MaxLengthSeconds = 60, LeadInSeconds = 0.25 });
+        Assert.Equal(91.75, plan.Start, 3);
+        Assert.Equal(150, plan.End);
+    }
+
+    [Fact]
+    public void Kurzer_Clip_bleibt_wie_bisher()
+    {
+        var plan = CutPlanner.Plan(45, new Transcript([new Word("Ich", 0.5, 0.8)]), new CutSettings { MaxLengthSeconds = 60 });
+        Assert.Equal(0, plan.Start);
+        Assert.Equal(45, plan.End);
     }
 
     [Fact]

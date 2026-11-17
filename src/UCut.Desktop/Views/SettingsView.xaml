@@ -182,6 +182,7 @@
                         <TextBox Text="{Binding MaxDeadStart}" Width="120" HorizontalAlignment="Left"/>
                         <TextBlock Style="{StaticResource Field}" Text="Maximale Länge (Sekunden)"/>
                         <TextBox Text="{Binding MaxLength}" Width="120" HorizontalAlignment="Left"/>
+                        <CheckBox Content="Längere Clips: das Ende behalten (Backtrack, der lustige Moment ist am Schluss)" IsChecked="{Binding KeepEndOfLongClips}" Margin="0,8,0,0"/>
                         <CheckBox Content="Uleimon-Logo unter die Cam" IsChecked="{Binding LogoEnabled}" Margin="0,12,0,0"/>
                     </StackPanel>
                 </Border>

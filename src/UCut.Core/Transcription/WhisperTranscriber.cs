@@ -78,10 +78,32 @@ public sealed class WhisperTranscriber(WhisperSettings settings, Action<string>?
         }
 
         var result = new List<Word>();
+        char? closing = null; // inside a marker over several words: "[Video von Einstein im Hintergrund]"
         for (var i = 0; i < words.Count; i++)
         {
             var (text, start, lastTime) = words[i];
             var clean = text.Trim('"', '\u201E', '\u201C');
+            if (closing is { } open)
+            {
+                if (clean.Contains(open))
+                {
+                    closing = null;
+                }
+
+                continue;
+            }
+
+            if (clean.Length > 0 && clean[0] is '[' or '(' or '*')
+            {
+                var close = clean[0] switch { '[' => ']', '(' => ')', _ => '*' };
+                if (clean.IndexOf(close, 1) < 0)
+                {
+                    closing = close;
+                }
+
+                continue;
+            }
+
             if (IsNonSpeechMarker(clean))
             {
                 continue;

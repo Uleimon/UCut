@@ -31,6 +31,20 @@ public class TranscriptionTests
     }
 
     [Fact]
+    public void Markierung_ueber_mehrere_Woerter_wird_ganz_entfernt()
+    {
+        // Whisper schreibt manchmal Beschreibungen statt Sprache, die landeten im Titel
+        var words = BuildWords(
+        [
+            new RawToken(" [", 0.1), new RawToken("Video", 0.2), new RawToken(" von", 0.3), new RawToken(" Einstein", 0.4),
+            new RawToken(" im", 0.5), new RawToken(" Hintergrund", 0.6), new RawToken("]", 0.7),
+            new RawToken(" (Musik", 0.8), new RawToken(" läuft)", 0.9),
+            new RawToken(" Ja,", 1.0), new RawToken(" da", 1.2),
+        ]);
+        Assert.Equal(["Ja,", "da"], words.Select(w => w.Text));
+    }
+
+    [Fact]
     public void Zeiten_bleiben_aufsteigend()
     {
         var words = BuildWords([new RawToken(" a", 2.0), new RawToken(" b", 1.5), new RawToken(" c", 3.0)]);

@@ -100,6 +100,12 @@ public sealed class CutSettings
 
     /// <summary>Hard cap for the clip length (seconds). 0 = no cap.</summary>
     public double MaxLengthSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// Longer clips keep their end (Aitum Backtrack: the moment is right before the hotkey).
+    /// Off: keep the start, as before 0.8.2.
+    /// </summary>
+    public bool KeepEndOfLongClips { get; set; } = true;
 }
 
 public sealed class LogoSettings

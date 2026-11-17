@@ -191,6 +191,7 @@ internal sealed class SettingsViewModel : ObservableObject
     public bool LogoEnabled { get => _s.Logo.Enabled; set { _s.Logo.Enabled = value; OnPropertyChanged(); } }
     public double MaxDeadStart { get => _s.Cut.MaxDeadStartSeconds; set { _s.Cut.MaxDeadStartSeconds = Math.Max(0, value); OnPropertyChanged(); } }
     public double MaxLength { get => _s.Cut.MaxLengthSeconds; set { _s.Cut.MaxLengthSeconds = Math.Clamp(value, 5, 600); OnPropertyChanged(); } }
+    public bool KeepEndOfLongClips { get => _s.Cut.KeepEndOfLongClips; set { _s.Cut.KeepEndOfLongClips = value; OnPropertyChanged(); } }
 
     public string ToolStatus { get => _toolStatus; private set => Set(ref _toolStatus, value); }
     public bool FfmpegOk { get => _ffmpegOk; private set => Set(ref _ffmpegOk, value); }
