@@ -74,6 +74,31 @@ internal sealed class TwitchViewModel : ObservableObject
         });
         ShowMoreCommand = new RelayCommand(_ => ShowMore());
         OpenClipCommand = new RelayCommand(p => { if (p is TwitchItem t) { Shell.Open(t.Clip.Url); } });
+        DownloadCommand = new RelayCommand(async p =>
+        {
+            // Just the clip as it is on Twitch, into the Downloads folder: no cut, no subtitles.
+            if (p is not TwitchItem t)
+            {
+                return;
+            }
+
+            try
+            {
+                var engine = _main.Engine;
+                _main.Log.Write($"\"{t.Title}\" wird von Twitch heruntergeladen ...");
+                var copy = await Task.Run(async () =>
+                {
+                    var original = await engine.DownloadTwitchClipAsync(t.Clip);
+                    return UCut.Upload.UploadCopy.SaveCopy(original, t.Title, UCut.Upload.UploadCopy.DownloadsFolder);
+                });
+                _main.Log.Write($"Heruntergeladen: {copy}");
+                Shell.ShowInExplorer(copy);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or System.IO.IOException or UnauthorizedAccessException)
+            {
+                _main.Dialogs.Info("Download", $"Das ging nicht: {ex.Message}");
+            }
+        });
         OpenSettingsCommand = new RelayCommand(_ => _main.Page = "settings");
         OpenDevConsoleCommand = new RelayCommand(_ => Shell.Open("https://dev.twitch.tv/console/apps"));
     }
@@ -88,6 +113,7 @@ internal sealed class TwitchViewModel : ObservableObject
     public string MoreText => $"Mehr anzeigen ({_all.Count - _shown} weitere)";
     public string SelectedText => _all.Count == 0 ? "" : $"{_all.Count(i => i.Selected)} von {_all.Count} ausgewählt · ";
     public RelayCommand OpenClipCommand { get; }
+    public RelayCommand DownloadCommand { get; }
     public RelayCommand OpenSettingsCommand { get; }
     public RelayCommand OpenDevConsoleCommand { get; }
 

@@ -101,7 +101,7 @@
                     </DockPanel>
                     <Border Background="Black" CornerRadius="10">
                         <Grid>
-                            <MediaElement x:Name="Player" Source="{Binding SourceUri}" LoadedBehavior="Manual" UnloadedBehavior="Pause" ScrubbingEnabled="True"
+                            <MediaElement x:Name="Player" Source="{Binding SourceUri}" LoadedBehavior="Manual" UnloadedBehavior="Pause" ScrubbingEnabled="True" Volume="{Binding Volume, Source={x:Static local:Sound.Current}, Mode=OneWay}"
                                           Stretch="Uniform" MediaOpened="OnMediaOpened"/>
                             <MediaElement x:Name="MusicPlayer" Source="{Binding MusicUri}" LoadedBehavior="Manual" UnloadedBehavior="Stop" Visibility="Collapsed"/>
                         </Grid>

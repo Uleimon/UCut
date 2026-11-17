@@ -9,6 +9,9 @@ public sealed class UCutSettings
     /// <summary>Folder where Aitum Vertical (or OBS) saves the vertical replays/clips.</summary>
     public string WatchFolder { get; set; } = "";
 
+    /// <summary>Volume of every player in the window, 0 to 1.</summary>
+    public double Volume { get; set; } = 0.3;
+
     /// <summary>"Auto" (watch the Aitum folder) was on when UCut was closed: switch it on again at start.</summary>
     public bool AutoWatch { get; set; }
 

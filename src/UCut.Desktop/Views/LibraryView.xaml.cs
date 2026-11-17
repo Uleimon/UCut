@@ -12,6 +12,7 @@ public partial class LibraryView : UserControl
     private bool _playing;
     private bool _fromTimer;
     private LibraryViewModel? _vm;
+    private string? _shownPath;
 
     public LibraryView()
     {
@@ -55,6 +56,17 @@ public partial class LibraryView : UserControl
                 // Let go of the file right now, so it can be deleted or rendered again.
                 Player.Stop();
                 Player.Close();
+                SetPlaying(false);
+                return;
+            }
+
+            // The same clip again (it was made again, or the gallery was read anew): do not start it by itself.
+            var path = _vm.Selected.Clip.VideoPath;
+            var same = string.Equals(path, _shownPath, StringComparison.OrdinalIgnoreCase);
+            _shownPath = path;
+            if (same)
+            {
+                Player.Stop();
                 SetPlaying(false);
                 return;
             }

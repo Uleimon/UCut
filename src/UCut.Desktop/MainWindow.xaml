@@ -35,6 +35,12 @@
             <DockPanel Margin="8,14">
                 <Image DockPanel.Dock="Top" Source="Assets/ucut-256.png" Width="44" Height="44" Margin="0,0,0,18" RenderOptions.BitmapScalingMode="HighQuality"/>
                 <StackPanel DockPanel.Dock="Bottom">
+                    <StackPanel Margin="0,0,0,10" ToolTip="{Binding Text, Source={x:Static local:Sound.Current}}">
+                        <Slider Orientation="Vertical" Height="80" HorizontalAlignment="Center" Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1"
+                                IsMoveToPointEnabled="True" Value="{Binding Volume, Source={x:Static local:Sound.Current}}"/>
+                        <TextBlock Text="{Binding Icon, Source={x:Static local:Sound.Current}}" FontFamily="{StaticResource Icons}" FontSize="18"
+                                   HorizontalAlignment="Center" Margin="0,6,0,0" Foreground="{StaticResource SubtleTextBrush}"/>
+                    </StackPanel>
                     <ToggleButton ToolTip="Aitum-Ordner überwachen: neue Clips werden automatisch fertig gemacht" Cursor="Hand"
                                   IsChecked="{Binding IsWatching}" Margin="0,0,0,4">
                         <ToggleButton.Template>

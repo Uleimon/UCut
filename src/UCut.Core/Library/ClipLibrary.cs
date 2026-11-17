@@ -20,12 +20,37 @@ public sealed class LibraryClip(string videoPath, string metadataPath, ClipMetad
 
     public string Title => string.IsNullOrWhiteSpace(Metadata.YouTube.Title) ? Path.GetFileNameWithoutExtension(VideoPath) : Metadata.YouTube.Title;
 
-    public void Save() => Metadata.Save(MetadataPath);
+    public void Save()
+    {
+        Metadata.Save(MetadataPath);
+        ClipLibrary.Remember(this);
+    }
 }
 
 /// <summary>Reads all finished clips (OutputFolder\&lt;Spiel&gt;\*.json next to *.mp4).</summary>
 public static class ClipLibrary
 {
+    // Info files already read, by path, with the file's time and size. With a thousand clips, reading every
+    // info file again after each change made the whole window stutter; unchanged files keep their clip object.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime Stamp, long Size, LibraryClip Clip)> Cache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>After UCut itself saved the info file: the object in memory is the current one.</summary>
+    internal static void Remember(LibraryClip clip)
+    {
+        try
+        {
+            var info = new FileInfo(clip.MetadataPath);
+            if (info.Exists)
+            {
+                Cache[Path.GetFullPath(clip.MetadataPath)] = (info.LastWriteTimeUtc, info.Length, clip);
+            }
+        }
+        catch (IOException)
+        {
+        }
+    }
+
     public static List<LibraryClip> Load(string outputFolder)
     {
         var result = new List<LibraryClip>();
@@ -51,7 +76,17 @@ public static class ClipLibrary
 
                 try
                 {
-                    result.Add(new LibraryClip(video, json, ClipMetadata.Load(json)));
+                    var key = Path.GetFullPath(json);
+                    var info = new FileInfo(json);
+                    if (Cache.TryGetValue(key, out var hit) && hit.Stamp == info.LastWriteTimeUtc && hit.Size == info.Length)
+                    {
+                        result.Add(hit.Clip);
+                        continue;
+                    }
+
+                    var clip = new LibraryClip(video, json, ClipMetadata.Load(json));
+                    Cache[key] = (info.LastWriteTimeUtc, info.Length, clip);
+                    result.Add(clip);
                 }
                 catch (Exception ex) when (ex is JsonException or InvalidDataException or IOException)
                 {
@@ -88,6 +123,7 @@ public static class ClipLibrary
     /// <summary>Deletes video, info file and preview picture.</summary>
     public static void Delete(LibraryClip clip)
     {
+        Cache.TryRemove(Path.GetFullPath(clip.MetadataPath), out _);
         foreach (var p in new[] { clip.VideoPath, clip.MetadataPath, clip.ThumbnailPath, clip.YouTubeThumbnailPath })
         {
             Media.FileRetry.Delete(p);

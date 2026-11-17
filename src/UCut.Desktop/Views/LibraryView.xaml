@@ -107,8 +107,12 @@
                     </StackPanel>
                 </Border>
 
+                <DockPanel Visibility="{Binding IsEmpty, Converter={StaticResource InvBoolToVis}}">
+                <Button DockPanel.Dock="Bottom" HorizontalAlignment="Center" Margin="0,8,0,8" Content="{Binding MoreText}" Command="{Binding ShowMoreCommand}"
+                        Visibility="{Binding HasMore, Converter={StaticResource BoolToVis}}"
+                        ToolTip="Es werden immer 120 Clips auf einmal gezeigt, damit UCut flüssig bleibt. Suche, Spiel-Filter und Sortierung gehen über alle Clips."/>
                 <ListBox x:Name="Gallery" ItemsSource="{Binding Clips}" SelectedItem="{Binding Selected}"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" Visibility="{Binding IsEmpty, Converter={StaticResource InvBoolToVis}}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          VirtualizingPanel.IsVirtualizing="False">
                     <ListBox.ItemsPanel>
                         <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
@@ -175,6 +179,7 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+                </DockPanel>
             </Grid>
         </DockPanel>
 
@@ -183,14 +188,19 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="20" DataContext="{Binding Selected}">
                     <Grid Height="460" Background="Black" MouseLeftButtonDown="OnPlayerClick" ToolTip="Doppelklick: Vollbild">
-                        <MediaElement x:Name="Player" Source="{Binding VideoUri}" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform"
+                        <MediaElement x:Name="Player" Source="{Binding VideoUri}" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform" Volume="{Binding Volume, Source={x:Static local:Sound.Current}, Mode=OneWay}"
                                       MediaOpened="OnMediaOpened" MediaEnded="OnMediaEnded"/>
                         <Button x:Name="PlayButton" Style="{StaticResource IconButton}" Content="&#xE769;" Click="OnPlayPause"
                                 HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Background="#AA000000"/>
                         <Button Style="{StaticResource IconButton}" Content="&#xE740;" Click="OnFullscreen" ToolTip="Vollbild (oder Doppelklick aufs Video)"
                                 HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Background="#AA000000"/>
                     </Grid>
-                    <Slider x:Name="Seek" Margin="0,6,0,0" Minimum="0" Maximum="1" ValueChanged="OnSeek" IsMoveToPointEnabled="True" SmallChange="0.02" LargeChange="0.1"/>
+                    <DockPanel Margin="0,6,0,0">
+                        <Slider DockPanel.Dock="Right" Width="90" Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1" IsMoveToPointEnabled="True" VerticalAlignment="Center"
+                                Value="{Binding Volume, Source={x:Static local:Sound.Current}}" ToolTip="{Binding Text, Source={x:Static local:Sound.Current}}"/>
+                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Icon}" Text="{Binding Icon, Source={x:Static local:Sound.Current}}" Margin="10,0,6,0" VerticalAlignment="Center"/>
+                        <Slider x:Name="Seek" Minimum="0" Maximum="1" ValueChanged="OnSeek" IsMoveToPointEnabled="True" SmallChange="0.02" LargeChange="0.1" VerticalAlignment="Center"/>
+                    </DockPanel>
 
                     <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold" Margin="0,10,0,4" TextWrapping="Wrap"/>
                     <TextBlock Style="{StaticResource Subtle}" TextWrapping="Wrap">
@@ -232,6 +242,12 @@
                         </Button>
                         <Button Style="{StaticResource IconButton}" Content="&#xE768;" ToolTip="Im Videoplayer abspielen" Command="{Binding PlayCommand}" Margin="0,0,8,8"/>
                         <Button Style="{StaticResource IconButton}" Content="&#xE838;" ToolTip="Im Ordner zeigen" Command="{Binding ShowInFolderCommand}" Margin="0,0,8,8"/>
+                        <Button Command="{Binding DownloadCommand}" Margin="0,0,8,8" ToolTip="Legt eine Kopie des fertigen Clips mit dem Titel als Namen in deinen Downloads-Ordner">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE896;" Style="{StaticResource Icon}" Margin="0,0,8,0"/>
+                                <TextBlock Text="Download"/>
+                            </StackPanel>
+                        </Button>
                         <Button Style="{StaticResource IconButton}" Content="&#xE74D;" ToolTip="Clip löschen" Command="{Binding DeleteCommand}" Margin="0,0,8,8"/>
                     </WrapPanel>
 

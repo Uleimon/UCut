@@ -45,7 +45,20 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
         Twitch = new TwitchViewModel(this);
         Settings = new SettingsViewModel(this);
         Tablet = new UCut.Tablet.TabletServer(() => Engine.Settings);
-        Tablet.ClipsChanged += () => _ui.BeginInvoke(() => Library.Refresh());
+        Tablet.ClipsChanged += () => _ui.BeginInvoke(() => Library.Refresh(rebind: true));
+        Sound.Current.Volume = Engine.Settings.Volume;
+        var saveVolume = new DispatcherTimer(DispatcherPriority.Background, _ui) { Interval = TimeSpan.FromSeconds(1) };
+        saveVolume.Tick += (_, _) =>
+        {
+            saveVolume.Stop();
+            SaveVolume();
+        };
+        Sound.Current.Changed += () =>
+        {
+            // Saved a moment after the slider stops moving, not on every step.
+            saveVolume.Stop();
+            saveVolume.Start();
+        };
         _ = _ui.BeginInvoke(() => _ = ApplyTabletAsync(), DispatcherPriority.Background);
         if (Engine.Settings.AutoWatch)
         {
@@ -320,6 +333,21 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException)
         {
             Log.Write($"Einstellung nicht gespeichert: {ex.Message}");
+        }
+    }
+
+    private void SaveVolume()
+    {
+        try
+        {
+            var s = SettingsStore.Load(SettingsPath);
+            s.Volume = Sound.Current.Volume;
+            SettingsStore.Save(s, SettingsPath);
+            Engine.Settings.Volume = s.Volume;
+        }
+        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+        {
+            Log.Write($"Lautstärke nicht gespeichert: {ex.Message}");
         }
     }
 

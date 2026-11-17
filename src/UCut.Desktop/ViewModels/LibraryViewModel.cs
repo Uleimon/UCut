@@ -51,6 +51,9 @@ internal sealed class ClipCard(LibraryClip clip) : ObservableObject
 
     public bool Dirty { get; set; }
 
+    /// <summary>The texts or ticks were changed elsewhere (tablet): show them again.</summary>
+    public void Rebind() => OnPropertyChanged(string.Empty);
+
     public string UploadedText => Clip.Metadata.Uploaded.Count == 0
         ? "Noch nirgends hochgeladen."
         : string.Join("\n", Clip.Metadata.Uploaded.Select(u => $"{u.Key}: {u.Value}"));
@@ -117,6 +120,11 @@ internal sealed class LibraryViewModel : ObservableObject
     private string _search = "";
     private ClipCard? _selected;
     private int _loadGeneration;
+    private List<ClipCard> _filtered = [];
+    private int _shown = PageSize;
+
+    /// <summary>Cards drawn at once; more with "Mehr anzeigen". Drawing every clip made each change slow.</summary>
+    public const int PageSize = 120;
 
     public const string AllGames = "Alle";
 
@@ -145,6 +153,25 @@ internal sealed class LibraryViewModel : ObservableObject
             }
         }, _ => Selected is not null);
         SaveTextsCommand = new RelayCommand(_ => SaveSelected(), _ => Selected is not null);
+        DownloadCommand = new RelayCommand(async _ =>
+        {
+            if (Selected is not { } c)
+            {
+                return;
+            }
+
+            try
+            {
+                var (video, title) = (c.Clip.VideoPath, c.Title);
+                var copy = await Task.Run(() => UCut.Upload.UploadCopy.SaveCopy(video, title, UCut.Upload.UploadCopy.DownloadsFolder));
+                _main.Log.Write($"Heruntergeladen: {copy}");
+                Shell.ShowInExplorer(copy);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _main.Dialogs.Info("Herunterladen", $"Das ging nicht: {ex.Message}");
+            }
+        }, _ => Selected is not null);
         CopyCommand = new RelayCommand(p =>
         {
             if (Selected is not { } c)
@@ -167,7 +194,7 @@ internal sealed class LibraryViewModel : ObservableObject
             {
             }
         }, _ => Selected is not null);
-        UploadCommand = new RelayCommand(p =>
+        UploadCommand = new RelayCommand(async p =>
         {
             if (Selected is not { } c)
             {
@@ -200,7 +227,9 @@ internal sealed class LibraryViewModel : ObservableObject
             var file = c.Clip.VideoPath;
             try
             {
-                file = UCut.Upload.UploadCopy.Create(c.Clip.VideoPath, nameText, UCut.Upload.UploadCopy.DefaultFolder);
+                // Copying a whole video takes a moment: not on the window's thread.
+                var source = file;
+                file = await Task.Run(() => UCut.Upload.UploadCopy.Create(source, nameText, UCut.Upload.UploadCopy.DefaultFolder));
             }
             catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
             {
@@ -236,7 +265,12 @@ internal sealed class LibraryViewModel : ObservableObject
             }
         }, _ => Selected is not null);
         RedoCommand = new RelayCommand(_ => Redo(), _ => Selected is not null && !_main.JobRunning);
-        RecreateAllCommand = new RelayCommand(_ => RecreateAll(), _ => Clips.Count > 0 && !_main.JobRunning);
+        RecreateAllCommand = new RelayCommand(_ => RecreateAll(), _ => _filtered.Count > 0 && !_main.JobRunning);
+        ShowMoreCommand = new RelayCommand(_ =>
+        {
+            _shown += PageSize;
+            ShowPage();
+        });
         SubtitlesNowCommand = new RelayCommand(_ => { if (Selected is { SubtitlesPending: true } c) { AddSubtitles([c]); } }, _ => Selected is { SubtitlesPending: true } && !_main.JobRunning);
         SubtitlesAllCommand = new RelayCommand(_ => AddSubtitles(_all.Where(c => c.SubtitlesPending).ToList()), _ => HasPendingSubtitles && !_main.JobRunning);
         UploadNowCommand = new AsyncCommand(UploadNowAsync, () => Selected is not null && !_main.JobRunning && UploadTargets.Any(t => t.IsChecked));
@@ -259,9 +293,7 @@ internal sealed class LibraryViewModel : ObservableObject
         {
             if (Selected is { } c && _main.Dialogs.Confirm("Clip löschen", $"„{c.Title}“ wirklich löschen?\nVideo, Infodatei und Vorschaubild werden entfernt.", true))
             {
-                Selected = null;
-                ClipLibrary.Delete(c.Clip);
-                Refresh();
+                _ = DeleteAsync(c);
             }
         }, _ => Selected is not null);
     }
@@ -277,10 +309,14 @@ internal sealed class LibraryViewModel : ObservableObject
     public RelayCommand OpenOutputCommand { get; }
     public RelayCommand EditCommand { get; }
     public RelayCommand SaveTextsCommand { get; }
+    public RelayCommand DownloadCommand { get; }
     public RelayCommand CopyCommand { get; }
     public RelayCommand UploadCommand { get; }
     public RelayCommand RedoCommand { get; }
     public RelayCommand RecreateAllCommand { get; }
+    public RelayCommand ShowMoreCommand { get; }
+    public bool HasMore => Clips.Count < _filtered.Count;
+    public string MoreText => $"Mehr anzeigen ({_filtered.Count - Clips.Count} weitere)";
     public RelayCommand SubtitlesNowCommand { get; }
     public RelayCommand SubtitlesAllCommand { get; }
     public bool HasPendingSubtitles => _all.Any(c => c.SubtitlesPending);
@@ -294,12 +330,12 @@ internal sealed class LibraryViewModel : ObservableObject
     public bool HasAccounts => UploadTargets.Count > 0;
     public RelayCommand DeleteCommand { get; }
 
-    public string Game { get => _game; set { if (Set(ref _game, value ?? AllGames)) { ApplyFilter(); } } }
+    public string Game { get => _game; set { if (Set(ref _game, value ?? AllGames)) { _shown = PageSize; ApplyFilter(); } } }
 
     /// <summary>new, funny, score</summary>
-    public string Sort { get => _sort; set { if (Set(ref _sort, value ?? "new")) { ApplyFilter(); } } }
+    public string Sort { get => _sort; set { if (Set(ref _sort, value ?? "new")) { _shown = PageSize; ApplyFilter(); } } }
 
-    public string Search { get => _search; set { if (Set(ref _search, value ?? "")) { ApplyFilter(); } } }
+    public string Search { get => _search; set { if (Set(ref _search, value ?? "")) { _shown = PageSize; ApplyFilter(); } } }
 
     public ClipCard? Selected
     {
@@ -322,7 +358,7 @@ internal sealed class LibraryViewModel : ObservableObject
 
     public bool HasSelection => Selected is not null;
     public bool IsEmpty => _all.Count == 0;
-    public string CountText => $"{Clips.Count} Clip{(Clips.Count == 1 ? "" : "s")}";
+    public string CountText => $"{_filtered.Count} Clip{(_filtered.Count == 1 ? "" : "s")}";
 
     /// <summary>Connected accounts as checkboxes; what was ticked stays ticked for the next clip.</summary>
     public void RefreshTargets()
@@ -369,7 +405,7 @@ internal sealed class LibraryViewModel : ObservableObject
     {
         SaveSelected();
         var engine = _main.Engine;
-        var clips = Clips.Select(c => c.Clip).ToList();
+        var clips = _filtered.Select(c => c.Clip).ToList();
         var missing = clips.Count(c => engine.FindOriginal(c) is null);
         var which = Game == AllGames && Search.Length == 0 ? "Alle" : "Alle angezeigten";
         var text = $"{which} {clips.Count} Clips werden genau wie vorher neu gerendert (gleicher Schnitt, gleicher Aufbau, gleiche Wörter). "
@@ -388,6 +424,31 @@ internal sealed class LibraryViewModel : ObservableObject
             _main.Dialogs.Info("Recreate", $"{r.Done} Clips neu gerendert" + (r.Failed > 0 ? $", {r.Failed} übersprungen (siehe Protokoll)." : ".")
                                           + (r.Cancelled ? "\nAbgebrochen, der Rest ist unverändert." : ""));
         });
+    }
+
+    /// <summary>
+    /// The card disappears at once; the files are deleted in the background (a file still held by the player
+    /// is retried for some seconds, which used to freeze the window).
+    /// </summary>
+    private async Task DeleteAsync(ClipCard c)
+    {
+        c.Dirty = false; // nothing to save any more
+        Selected = null;
+        _all.Remove(c);
+        ApplyFilter();
+        OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(HasPendingSubtitles));
+        OnPropertyChanged(nameof(PendingSubtitlesText));
+        try
+        {
+            await Task.Run(() => ClipLibrary.Delete(c.Clip));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _main.Log.Write($"Löschen ging nicht: {ex.Message}");
+            _main.Dialogs.Info("Clip löschen", ex.Message);
+            Refresh();
+        }
     }
 
     /// <summary>Clips made with Instant Clip off get their subtitles now; cut, layout and texts stay.</summary>
@@ -449,34 +510,63 @@ internal sealed class LibraryViewModel : ObservableObject
         });
     }
 
-    public void Refresh()
+    /// <summary>
+    /// Reads the output folder again. Clips whose info file did not change keep their card, so the gallery is not
+    /// rebuilt and a clip that is playing keeps playing. <paramref name="rebind"/>: texts were changed from the tablet.
+    /// </summary>
+    public void Refresh(bool rebind = false)
     {
-        var selectedPath = Selected?.Clip.VideoPath;
+        var selected = Selected;
         var clips = ClipLibrary.Load(_main.Engine.Settings.OutputFolder);
         var old = _all.ToDictionary(c => c.Clip.VideoPath, StringComparer.OrdinalIgnoreCase);
-        _all = clips.Select(c => old.TryGetValue(c.VideoPath, out var o) && !o.Dirty ? new ClipCard(c) { Thumbnail = o.Thumbnail } : new ClipCard(c)).ToList();
+        _all = clips.Select(c =>
+        {
+            if (!old.TryGetValue(c.VideoPath, out var o))
+            {
+                return new ClipCard(c);
+            }
+
+            if (ReferenceEquals(o.Clip, c))
+            {
+                if (rebind)
+                {
+                    o.Rebind();
+                }
+
+                return o;
+            }
+
+            return o.Dirty ? new ClipCard(c) : new ClipCard(c) { Thumbnail = o.Thumbnail };
+        }).ToList();
 
         var games = _all.Select(c => c.Game).Where(g => g.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
-        Games.Clear();
-        Games.Add(AllGames);
-        foreach (var g in games)
+        if (!games.SequenceEqual(Games.Skip(1), StringComparer.Ordinal))
         {
-            Games.Add(g);
-        }
+            var game = _game;
+            Games.Clear();
+            Games.Add(AllGames);
+            foreach (var g in games)
+            {
+                Games.Add(g);
+            }
 
-        if (!Games.Contains(_game))
-        {
-            _game = AllGames;
+            // Clearing the list empties the combo box; put the choice back.
+            _game = Games.Contains(game) ? game : AllGames;
             OnPropertyChanged(nameof(Game));
         }
 
         ApplyFilter();
-        Selected = selectedPath is null ? null : Clips.FirstOrDefault(c => string.Equals(c.Clip.VideoPath, selectedPath, StringComparison.OrdinalIgnoreCase));
+        if (selected is not null)
+        {
+            Selected = _all.Contains(selected)
+                ? selected
+                : _all.FirstOrDefault(c => string.Equals(c.Clip.VideoPath, selected.Clip.VideoPath, StringComparison.OrdinalIgnoreCase));
+        }
+
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(HasPendingSubtitles));
         OnPropertyChanged(nameof(PendingSubtitlesText));
         RefreshTargets();
-        _ = LoadThumbnailsAsync(++_loadGeneration);
     }
 
     private void ApplyFilter()
@@ -498,27 +588,62 @@ internal sealed class LibraryViewModel : ObservableObject
             "score" => q.OrderByDescending(c => c.Score),
             _ => q.OrderByDescending(c => c.Clip.Date),
         };
-        Clips.Clear();
-        foreach (var c in q)
+        _filtered = q.ToList();
+        ShowPage();
+        OnPropertyChanged(nameof(CountText));
+    }
+
+    /// <summary>Brings the shown cards in line with the first page(s) of the filtered list, touching only what differs.</summary>
+    private void ShowPage()
+    {
+        var target = _filtered.Take(_shown).ToList();
+        if (!target.SequenceEqual(Clips))
         {
-            Clips.Add(c);
+            var keep = new HashSet<ClipCard>(target);
+            for (var i = Clips.Count - 1; i >= 0; i--)
+            {
+                if (!keep.Contains(Clips[i]))
+                {
+                    Clips.RemoveAt(i);
+                }
+            }
+
+            for (var i = 0; i < target.Count; i++)
+            {
+                if (i < Clips.Count && ReferenceEquals(Clips[i], target[i]))
+                {
+                    continue;
+                }
+
+                var at = Clips.IndexOf(target[i]);
+                if (at >= 0)
+                {
+                    Clips.Move(at, i);
+                }
+                else
+                {
+                    Clips.Insert(i, target[i]);
+                }
+            }
         }
 
-        OnPropertyChanged(nameof(CountText));
+        OnPropertyChanged(nameof(HasMore));
+        OnPropertyChanged(nameof(MoreText));
+        _ = LoadThumbnailsAsync(++_loadGeneration);
     }
 
     private async Task LoadThumbnailsAsync(int generation)
     {
         var ffmpeg = _main.Engine.Settings.FfmpegPath;
-        foreach (var card in _all.Where(c => c.Thumbnail is null).ToList())
+        foreach (var card in Clips.Where(c => c.Thumbnail is null).ToList())
         {
             if (generation != _loadGeneration)
             {
                 return;
             }
 
-            var path = await Task.Run(() => ClipLibrary.EnsureThumbnailAsync(card.Clip, ffmpeg));
-            card.Thumbnail = Shell.LoadImage(path, 200);
+            // Decoded on a background thread (the picture is frozen), so scrolling stays smooth.
+            card.Thumbnail = await Task.Run(async () => Shell.LoadImage(await ClipLibrary.EnsureThumbnailAsync(card.Clip, ffmpeg), 200));
         }
     }
 

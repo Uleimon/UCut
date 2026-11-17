@@ -177,15 +177,18 @@ public sealed class UCutEngine : IDisposable
         var done = UCut.Library.ClipLibrary.Load(Settings.OutputFolder)
             .Select(c => c.Metadata.SourceFile)
             .Where(s => s.Length > 0)
-            .Select(Path.GetFullPath)
+            .Select(ClipImport.ClipKey) // a clip made from the MKV is not made again from its MP4
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         return Directory.EnumerateFiles(Settings.WatchFolder)
             .Where(ClipImport.IsVideo)
             .Select(Path.GetFullPath)
-            .Where(f => !done.Contains(f) && File.GetLastWriteTimeUtc(f) >= since.UtcDateTime)
+            .Where(f => !ClipImport.HasMp4Twin(f) && !done.Contains(ClipImport.ClipKey(f)) && File.GetLastWriteTimeUtc(f) >= since.UtcDateTime)
             .OrderBy(File.GetLastWriteTimeUtc)
             .ToList();
     }
+
+    /// <summary>How long a fresh MKV waits for OBS to put the remuxed MP4 next to it.</summary>
+    public TimeSpan RemuxWait { get; set; } = TimeSpan.FromSeconds(20);
 
     /// <summary>Watches the Aitum folder until cancelled. The game is detected the moment a clip appears.</summary>
     public async Task WatchAsync(CancellationToken ct)
@@ -212,7 +215,7 @@ public sealed class UCutEngine : IDisposable
             foreach (var file in missed)
             {
                 ct.ThrowIfCancellationRequested();
-                made.Add(file);
+                made.Add(ClipImport.ClipKey(file));
                 try
                 {
                     if (!await ClipWatcher.WaitUntilCompleteAsync(file, TimeSpan.FromSeconds(2), ct).ConfigureAwait(false))
@@ -233,8 +236,17 @@ public sealed class UCutEngine : IDisposable
             Log.Write("Bereit. Neue Clips werden automatisch verarbeitet.");
             await foreach (var file in watcher.ReadFinishedAsync(ct).ConfigureAwait(false))
             {
-                if (!made.Add(Path.GetFullPath(file)))
+                // OBS remux: the MKV comes first, the MP4 a moment later. Only the MP4 is made.
+                if (await ClipImport.WaitForMp4TwinAsync(file, RemuxWait, ct).ConfigureAwait(false))
                 {
+                    detected.TryRemove(file, out _);
+                    Log.Write($"{Path.GetFileName(file)} übersprungen, die MP4 daneben wird genommen.");
+                    continue;
+                }
+
+                if (!made.Add(ClipImport.ClipKey(file)))
+                {
+                    detected.TryRemove(file, out _);
                     continue;
                 }
 

@@ -96,7 +96,7 @@ public partial class CutRoomView : UserControl
             return;
         }
 
-        MusicPlayer.Volume = _vm.MusicVolume;
+        MusicPlayer.Volume = _vm.MusicVolume * Sound.Current.Volume;
         var musicPos = _vm.Playhead - _vm.MusicStart;
         if (!_playing || musicPos < 0)
         {

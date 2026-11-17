@@ -284,3 +284,97 @@ public class MissedAitumClipTests
         public Task<Transcript> TranscribeAsync(string wav16kMono, CancellationToken ct = default) => Task.FromResult(new Transcript([]));
     }
 }
+
+public class RemuxTwinTests
+{
+    [Fact]
+    public async Task Von_MKV_und_MP4_mit_gleichem_Namen_zaehlt_nur_die_MP4()
+    {
+        var dir = Directory.CreateTempSubdirectory("ucut-remux-").FullName;
+        try
+        {
+            var mkv = Path.Combine(dir, "Replay 1.mkv");
+            var mp4 = Path.Combine(dir, "Replay 1.mp4");
+            var alone = Path.Combine(dir, "Replay 2.mkv");
+            foreach (var f in new[] { mkv, mp4, alone })
+            {
+                File.WriteAllText(f, "x");
+            }
+
+            Assert.True(ClipImport.HasMp4Twin(mkv));
+            Assert.False(ClipImport.HasMp4Twin(mp4));
+            Assert.False(ClipImport.HasMp4Twin(alone));
+            Assert.Equal(ClipImport.ClipKey(mkv), ClipImport.ClipKey(mp4));
+            Assert.Equal([mp4, alone], ClipImport.Collect([dir], out _));
+
+            // A fresh MKV: the MP4 shows up a moment later.
+            var late = Path.Combine(dir, "Replay 3.mkv");
+            File.WriteAllText(late, "x");
+            var wait = ClipImport.WaitForMp4TwinAsync(late, TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            File.WriteAllText(Path.ChangeExtension(late, ".mp4"), "x");
+            Assert.True(await wait);
+            Assert.False(await ClipImport.WaitForMp4TwinAsync(alone, TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Download_Kopie_heisst_wie_der_Titel_und_ueberschreibt_nichts()
+    {
+        var dir = Directory.CreateTempSubdirectory("ucut-dl-").FullName;
+        try
+        {
+            var video = Path.Combine(dir, "2026-01-01_clip.mp4");
+            File.WriteAllText(video, "x");
+            var target = Path.Combine(dir, "Downloads");
+            var first = UCut.Upload.UploadCopy.SaveCopy(video, "Wer hat Kredit", target);
+            var second = UCut.Upload.UploadCopy.SaveCopy(video, "Wer hat Kredit", target);
+            Assert.Equal("Wer hat Kredit.mp4", Path.GetFileName(first));
+            Assert.Equal("Wer hat Kredit (2).mp4", Path.GetFileName(second));
+            Assert.True(File.Exists(first) && File.Exists(second) && File.Exists(video));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Galerie_liest_unveraenderte_Infodateien_nicht_neu()
+    {
+        var dir = Directory.CreateTempSubdirectory("ucut-cache-").FullName;
+        try
+        {
+            var game = Path.Combine(dir, "GTA V");
+            Directory.CreateDirectory(game);
+            File.WriteAllText(Path.Combine(game, "a.mp4"), "x");
+            new ClipMetadata { Video = "a.mp4", Game = "GTA V" }.Save(Path.Combine(game, "a.json"));
+
+            var first = Assert.Single(UCut.Library.ClipLibrary.Load(dir));
+            Assert.Same(first, Assert.Single(UCut.Library.ClipLibrary.Load(dir)));
+
+            // Saved by UCut itself: still the same object, with the new text.
+            first.Metadata.YouTube.Title = "Neu";
+            first.Save();
+            Assert.Same(first, Assert.Single(UCut.Library.ClipLibrary.Load(dir)));
+
+            // Written by someone else (a clip made again): read anew.
+            var other = new ClipMetadata { Video = "a.mp4", Game = "GTA V" };
+            other.YouTube.Title = "Von außen geändert";
+            other.Save(Path.Combine(game, "a.json"));
+            var again = Assert.Single(UCut.Library.ClipLibrary.Load(dir));
+            Assert.NotSame(first, again);
+            Assert.Equal("Von außen geändert", again.Metadata.YouTube.Title);
+
+            UCut.Library.ClipLibrary.Delete(again);
+            Assert.Empty(UCut.Library.ClipLibrary.Load(dir));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+}

@@ -32,7 +32,45 @@ public static class ClipImport
             }
         }
 
-        return files.Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return files.Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).Where(f => !HasMp4Twin(f)).ToList();
+    }
+
+    /// <summary>
+    /// OBS records an MKV and remuxes it to an MP4 with the same name: the same clip twice. Only the MP4 counts;
+    /// the MKV (or MOV) next to it is left alone.
+    /// </summary>
+    public static bool HasMp4Twin(string path) =>
+        !string.Equals(Path.GetExtension(path), ".mp4", StringComparison.OrdinalIgnoreCase)
+        && File.Exists(Path.ChangeExtension(path, ".mp4"));
+
+    /// <summary>Same clip, whatever the container: full path without the extension.</summary>
+    public static string ClipKey(string path) => Path.ChangeExtension(Path.GetFullPath(path), null);
+
+    /// <summary>
+    /// For a fresh MKV/MOV: waits a little for OBS to write the MP4 next to it. True = an MP4 is there, skip this file.
+    /// </summary>
+    public static async Task<bool> WaitForMp4TwinAsync(string path, TimeSpan wait, CancellationToken ct = default)
+    {
+        if (string.Equals(Path.GetExtension(path), ".mp4", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var until = DateTime.UtcNow + wait;
+        while (true)
+        {
+            if (HasMp4Twin(path))
+            {
+                return true;
+            }
+
+            if (DateTime.UtcNow >= until)
+            {
+                return false;
+            }
+
+            await Task.Delay(500, ct).ConfigureAwait(false);
+        }
     }
 
     public static bool IsVideo(string path) => Extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);

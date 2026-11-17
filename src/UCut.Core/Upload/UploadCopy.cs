@@ -78,6 +78,29 @@ public static class UploadCopy
     }
 
     /// <summary>Copies the clip into <paramref name="folder"/> under the text as name (old copies there are removed). Returns the copy.</summary>
+    /// <summary>The user's Downloads folder.</summary>
+    public static string DownloadsFolder =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+
+    /// <summary>
+    /// "Download": a copy of the video named after its title in <paramref name="folder"/>. Nothing is overwritten;
+    /// a second copy gets " (2)".
+    /// </summary>
+    public static string SaveCopy(string video, string title, string folder)
+    {
+        Directory.CreateDirectory(folder);
+        var ext = Path.GetExtension(video);
+        var name = Path.GetFileNameWithoutExtension(FileName(title.Trim().Length > 0 ? title : Path.GetFileNameWithoutExtension(video), ext));
+        var target = Path.Combine(folder, name + ext);
+        for (var i = 2; File.Exists(target); i++)
+        {
+            target = Path.Combine(folder, $"{name} ({i}){ext}");
+        }
+
+        File.Copy(video, target);
+        return target;
+    }
+
     public static string Create(string video, string text, string folder)
     {
         Directory.CreateDirectory(folder);

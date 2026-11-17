@@ -29,7 +29,7 @@ internal sealed class FullscreenPlayer : Window
         Background = Brushes.Black;
         ShowInTaskbar = false;
 
-        _player = new MediaElement { Source = source, LoadedBehavior = MediaState.Manual, UnloadedBehavior = MediaState.Close, Stretch = Stretch.Uniform };
+        _player = new MediaElement { Source = source, LoadedBehavior = MediaState.Manual, UnloadedBehavior = MediaState.Close, Stretch = Stretch.Uniform, Volume = Sound.Current.Volume };
         _player.MediaOpened += (_, _) =>
         {
             _player.Position = _start;

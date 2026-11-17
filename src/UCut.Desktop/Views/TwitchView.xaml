@@ -112,8 +112,12 @@
                                     <Run Text="{Binding Game, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding DateText, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Views, Mode=OneWay}"/>
                                 </TextBlock>
                                 <TextBlock Style="{StaticResource Subtle}" Foreground="{StaticResource FunBrush}" Text="{Binding Reasons}" Margin="0,4,0,0"/>
-                                <Button Content="Auf Twitch ansehen" HorizontalAlignment="Left" Margin="0,8,0,0" Padding="10,4"
-                                        Command="{Binding DataContext.OpenClipCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Button Content="Auf Twitch ansehen" Padding="10,4"
+                                            Command="{Binding DataContext.OpenClipCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
+                                    <Button Content="Download" Padding="10,4" Margin="8,0,0,0" ToolTip="Nur herunterladen: der Clip landet unbearbeitet in deinem Downloads-Ordner"
+                                            Command="{Binding DataContext.DownloadCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
+                                </StackPanel>
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -128,7 +132,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="16">
                     <Grid Height="214" Background="Black" MouseLeftButtonDown="OnPlayerClick" ToolTip="Doppelklick: Vollbild">
-                        <MediaElement x:Name="Player" Source="{Binding PreviewUri}" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform"
+                        <MediaElement x:Name="Player" Source="{Binding PreviewUri}" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform" Volume="{Binding Volume, Source={x:Static local:Sound.Current}, Mode=OneWay}"
                                       MediaOpened="OnMediaOpened" MediaEnded="OnMediaEnded"/>
                         <TextBlock Text="{Binding PreviewStatus}" Foreground="White" TextWrapping="Wrap" TextAlignment="Center"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16"/>

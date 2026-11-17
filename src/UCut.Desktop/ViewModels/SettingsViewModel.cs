@@ -225,6 +225,11 @@ internal sealed class SettingsViewModel : ObservableObject
 
         try
         {
+            // Values that are not set on this page but saved elsewhere in the meantime must survive.
+            var current = SettingsStore.Load(_main.SettingsPath);
+            _s.Volume = current.Volume;
+            _s.AutoWatch = current.AutoWatch;
+            _s.WatchSince = current.WatchSince;
             SettingsStore.Save(_s, _main.SettingsPath);
             var oldKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? "";
             if (!string.Equals(oldKey, ClaudeKey, StringComparison.Ordinal))
