@@ -100,6 +100,9 @@ internal sealed class ClipCard(LibraryClip clip) : ObservableObject
     }
 }
 
+/// <summary>One entry of the game list: name and how many clips it has.</summary>
+internal sealed record GameOption(string Name, string Label);
+
 /// <summary>A connected account in the upload box of the details panel.</summary>
 internal sealed class UploadTarget(UCut.Upload.UploadAccount account, bool isChecked) : ObservableObject
 {
@@ -153,6 +156,19 @@ internal sealed class LibraryViewModel : ObservableObject
             }
         }, _ => Selected is not null);
         SaveTextsCommand = new RelayCommand(_ => SaveSelected(), _ => Selected is not null);
+        UnloadCommand = new RelayCommand(_ => { if (Selected is { } c) { _ = UnloadAsync([c]); } }, _ => Selected is not null && !_main.JobRunning);
+        UnloadShownCommand = new RelayCommand(_ =>
+        {
+            var cards = _filtered.ToList();
+            var which = _game == AllGames && _search.Length == 0 ? "Alle" : _game != AllGames ? $"Alle {_game}-" : "Die angezeigten";
+            if (_main.Dialogs.Confirm("Entladen",
+                    $"{which} {cards.Count} Clips aus UCut rausnehmen?\n\nGelöscht wird nichts: die Dateien kommen in den Ordner „{ClipLibrary.UnloadedFolderName}“ im Ausgabeordner. "
+                    + "Mit „Entladene zurückholen“ sind sie wieder da."))
+            {
+                _ = UnloadAsync(cards);
+            }
+        }, _ => _filtered.Count > 0 && !_main.JobRunning);
+        ReloadUnloadedCommand = new RelayCommand(_ => _ = ReloadUnloadedAsync(), _ => _unloadedCount > 0 && !_main.JobRunning);
         DownloadCommand = new RelayCommand(async _ =>
         {
             if (Selected is not { } c)
@@ -301,6 +317,17 @@ internal sealed class LibraryViewModel : ObservableObject
     public ObservableCollection<ClipCard> Clips { get; } = [];
     public ObservableCollection<string> Games { get; } = [AllGames];
 
+    /// <summary>The game drop-down: "Alle (474)", "GTA V (31)", ... A drop-down instead of a button per game (there are many).</summary>
+    public ObservableCollection<GameOption> GameOptions { get; } = [new(AllGames, AllGames)];
+
+    private int _unloadedCount;
+    public bool HasUnloaded => _unloadedCount > 0;
+    public string ReloadUnloadedText => $"Entladene zurückholen ({_unloadedCount})";
+    public string UnloadShownText => _game == AllGames && _search.Length == 0 ? "Alle entladen" : $"Diese {_filtered.Count} entladen";
+    public RelayCommand UnloadShownCommand { get; }
+    public RelayCommand UnloadCommand { get; }
+    public RelayCommand ReloadUnloadedCommand { get; }
+
     public RelayCommand RefreshCommand { get; }
     public RelayCommand AddClipsCommand { get; }
     public RelayCommand PlayCommand { get; }
@@ -330,7 +357,26 @@ internal sealed class LibraryViewModel : ObservableObject
     public bool HasAccounts => UploadTargets.Count > 0;
     public RelayCommand DeleteCommand { get; }
 
-    public string Game { get => _game; set { if (Set(ref _game, value ?? AllGames)) { _shown = PageSize; ApplyFilter(); } } }
+    public string Game
+    {
+        get => _game;
+        set
+        {
+            // While the drop-down is refilled it briefly reports "nothing selected": keep the choice.
+            if (_updatingOptions)
+            {
+                return;
+            }
+
+            if (Set(ref _game, value ?? AllGames))
+            {
+                _shown = PageSize;
+                ApplyFilter();
+            }
+        }
+    }
+
+    private bool _updatingOptions;
 
     /// <summary>new, funny, score</summary>
     public string Sort { get => _sort; set { if (Set(ref _sort, value ?? "new")) { _shown = PageSize; ApplyFilter(); } } }
@@ -430,6 +476,118 @@ internal sealed class LibraryViewModel : ObservableObject
     /// The card disappears at once; the files are deleted in the background (a file still held by the player
     /// is retried for some seconds, which used to freeze the window).
     /// </summary>
+    /// <summary>"Entladen": cards go at once, files move to _Entladen in the background.</summary>
+    private async Task UnloadAsync(List<ClipCard> cards)
+    {
+        SaveSelected();
+        var folder = _main.Engine.Settings.OutputFolder;
+        if (Selected is { } sel && cards.Contains(sel))
+        {
+            Selected = null;
+        }
+
+        var gone = new HashSet<ClipCard>(cards);
+        _all.RemoveAll(gone.Contains);
+        ApplyFilter();
+        RefreshGameOptions();
+        OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(HasPendingSubtitles));
+        OnPropertyChanged(nameof(PendingSubtitlesText));
+        var failed = await Task.Run(() =>
+        {
+            var errors = 0;
+            foreach (var c in cards)
+            {
+                try
+                {
+                    ClipLibrary.Unload(c.Clip, folder);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    errors++;
+                }
+            }
+
+            return errors;
+        });
+        _main.Log.Write($"{cards.Count - failed} Clip(s) entladen" + (failed > 0 ? $", {failed} gingen nicht (Datei offen?)." : "."));
+        CountUnloaded();
+        if (failed > 0)
+        {
+            Refresh();
+        }
+    }
+
+    private async Task ReloadUnloadedAsync()
+    {
+        var folder = _main.Engine.Settings.OutputFolder;
+        var count = await Task.Run(() =>
+        {
+            var clips = ClipLibrary.LoadUnloaded(folder);
+            foreach (var c in clips)
+            {
+                try
+                {
+                    ClipLibrary.Reload(c, folder);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
+            }
+
+            return clips.Count;
+        });
+        _main.Log.Write($"{count} entladene Clip(s) zurückgeholt.");
+        Refresh();
+    }
+
+    private void CountUnloaded()
+    {
+        var folder = _main.Engine.Settings.OutputFolder;
+        _ = Task.Run(() => ClipLibrary.LoadUnloaded(folder).Count).ContinueWith(t =>
+        {
+            _unloadedCount = t.Result;
+            OnPropertyChanged(nameof(HasUnloaded));
+            OnPropertyChanged(nameof(ReloadUnloadedText));
+        }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    /// <summary>Drop-down entries with clip counts, kept in step with the game list.</summary>
+    private void RefreshGameOptions()
+    {
+        var counts = _all.Where(c => c.Game.Length > 0).GroupBy(c => c.Game, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        var options = new List<GameOption> { new(AllGames, $"Alle Spiele ({_all.Count})") };
+        options.AddRange(Games.Skip(1).Select(g => new GameOption(g, $"{g} ({counts.GetValueOrDefault(g)})")));
+        if (options.SequenceEqual(GameOptions))
+        {
+            return;
+        }
+
+        var game = _game;
+        _updatingOptions = true;
+        try
+        {
+            GameOptions.Clear();
+            foreach (var o in options)
+            {
+                GameOptions.Add(o);
+            }
+        }
+        finally
+        {
+            _updatingOptions = false;
+        }
+
+        var keep = options.Any(o => o.Name == game) ? game : AllGames;
+        _game = keep;
+        OnPropertyChanged(nameof(Game));
+        if (keep != game)
+        {
+            ApplyFilter();
+        }
+    }
+
     private async Task DeleteAsync(ClipCard c)
     {
         c.Dirty = false; // nothing to save any more
@@ -556,6 +714,8 @@ internal sealed class LibraryViewModel : ObservableObject
         }
 
         ApplyFilter();
+        RefreshGameOptions();
+        CountUnloaded();
         if (selected is not null)
         {
             Selected = _all.Contains(selected)
@@ -591,6 +751,7 @@ internal sealed class LibraryViewModel : ObservableObject
         _filtered = q.ToList();
         ShowPage();
         OnPropertyChanged(nameof(CountText));
+        OnPropertyChanged(nameof(UnloadShownText));
     }
 
     /// <summary>Brings the shown cards in line with the first page(s) of the filtered list, touching only what differs.</summary>

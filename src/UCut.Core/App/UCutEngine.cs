@@ -174,7 +174,9 @@ public sealed class UCutEngine : IDisposable
             return [];
         }
 
+        // Unloaded clips count as made: "Entladen" must not bring them back through the catch-up.
         var done = UCut.Library.ClipLibrary.Load(Settings.OutputFolder)
+            .Concat(UCut.Library.ClipLibrary.LoadUnloaded(Settings.OutputFolder))
             .Select(c => c.Metadata.SourceFile)
             .Where(s => s.Length > 0)
             .Select(ClipImport.ClipKey) // a clip made from the MKV is not made again from its MP4

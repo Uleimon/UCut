@@ -378,3 +378,51 @@ public class RemuxTwinTests
         }
     }
 }
+
+public class UnloadTests
+{
+    [Fact]
+    public void Entladen_nimmt_den_Clip_raus_ohne_zu_loeschen_und_zurueckholen_bringt_ihn_wieder()
+    {
+        var dir = Directory.CreateTempSubdirectory("ucut-unload-").FullName;
+        try
+        {
+            var game = Path.Combine(dir, "GTA V");
+            Directory.CreateDirectory(game);
+            File.WriteAllText(Path.Combine(game, "a.mp4"), "video");
+            File.WriteAllText(Path.Combine(game, "a.thumb.jpg"), "bild");
+            new ClipMetadata { Video = "a.mp4", Game = "GTA V", SourceFile = Path.Combine(dir, "aitum", "Replay.mp4") }.Save(Path.Combine(game, "a.json"));
+
+            var clip = Assert.Single(UCut.Library.ClipLibrary.Load(dir));
+            UCut.Library.ClipLibrary.Unload(clip, dir);
+            Assert.Empty(UCut.Library.ClipLibrary.Load(dir));
+            var unloaded = Assert.Single(UCut.Library.ClipLibrary.LoadUnloaded(dir));
+            Assert.Equal(Path.Combine(dir, "_Entladen", "GTA V", "a.mp4"), unloaded.VideoPath);
+            Assert.True(File.Exists(Path.Combine(dir, "_Entladen", "GTA V", "a.thumb.jpg")));
+
+            // The Aitum catch-up must not make an unloaded clip again.
+            var settings = new UCutSettings { OutputFolder = dir, WatchFolder = Path.Combine(dir, "aitum"), WatchSince = DateTimeOffset.Now.AddDays(-1) };
+            Directory.CreateDirectory(settings.WatchFolder);
+            File.WriteAllText(Path.Combine(settings.WatchFolder, "Replay.mp4"), "x");
+            using (var engine = new UCut.App.UCutEngine(settings, new UCut.App.RunLog(), transcriber: new NoTranscriber(), writer: new TemplateClipWriter()))
+            {
+                Assert.Empty(engine.MissedAitumClips());
+            }
+
+            UCut.Library.ClipLibrary.Reload(unloaded, dir);
+            var back = Assert.Single(UCut.Library.ClipLibrary.Load(dir));
+            Assert.Equal(Path.Combine(game, "a.mp4"), back.VideoPath);
+            Assert.Equal("video", File.ReadAllText(back.VideoPath));
+            Assert.Empty(UCut.Library.ClipLibrary.LoadUnloaded(dir));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    private sealed class NoTranscriber : ITranscriber
+    {
+        public Task<Transcript> TranscribeAsync(string wav16kMono, CancellationToken ct = default) => Task.FromResult(new Transcript([]));
+    }
+}

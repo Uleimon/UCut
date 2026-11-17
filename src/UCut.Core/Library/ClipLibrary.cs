@@ -120,6 +120,45 @@ public static class ClipLibrary
         }
     }
 
+    /// <summary>Folder for clips taken out of UCut with "Entladen" (kept, not deleted; the '_' hides it from the gallery).</summary>
+    public const string UnloadedFolderName = "_Entladen";
+
+    public static string UnloadedFolder(string outputFolder) => Path.Combine(outputFolder, UnloadedFolderName);
+
+    /// <summary>Clips taken out with "Entladen".</summary>
+    public static List<LibraryClip> LoadUnloaded(string outputFolder) => Load(UnloadedFolder(outputFolder));
+
+    /// <summary>
+    /// "Entladen": the clip leaves the gallery, its files move to _Entladen\&lt;Spiel&gt;. Nothing is deleted;
+    /// <see cref="Reload"/> brings it back.
+    /// </summary>
+    public static void Unload(LibraryClip clip, string outputFolder)
+    {
+        var game = Path.GetFileName(Path.GetDirectoryName(Path.GetFullPath(clip.VideoPath))) ?? "Unsortiert";
+        MoveFiles(clip, Path.Combine(UnloadedFolder(outputFolder), game));
+    }
+
+    /// <summary>Back from _Entladen into its game folder.</summary>
+    public static void Reload(LibraryClip clip, string outputFolder)
+    {
+        var game = Path.GetFileName(Path.GetDirectoryName(Path.GetFullPath(clip.VideoPath))) ?? "Unsortiert";
+        MoveFiles(clip, Path.Combine(outputFolder, game));
+    }
+
+    private static void MoveFiles(LibraryClip clip, string targetFolder)
+    {
+        Directory.CreateDirectory(targetFolder);
+        Cache.TryRemove(Path.GetFullPath(clip.MetadataPath), out _);
+        // Info file last: without it the clip is not listed, so a half move never shows up twice.
+        foreach (var p in new[] { clip.VideoPath, clip.ThumbnailPath, clip.YouTubeThumbnailPath, clip.MetadataPath })
+        {
+            if (File.Exists(p))
+            {
+                Media.FileRetry.Move(p, Path.Combine(targetFolder, Path.GetFileName(p)));
+            }
+        }
+    }
+
     /// <summary>Deletes video, info file and preview picture.</summary>
     public static void Delete(LibraryClip clip)
     {

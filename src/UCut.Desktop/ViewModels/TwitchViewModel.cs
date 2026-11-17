@@ -48,7 +48,12 @@ internal sealed class TwitchViewModel : ObservableObject
     private string _previewStatus = "";
     private CancellationTokenSource? _previewCts;
     private List<TwitchItem> _all = [];
+    private List<TwitchItem> _view = [];
     private int _shown;
+    private string _game = AllGames;
+    private bool _updatingOptions;
+
+    public const string AllGames = "Alle";
 
     /// <summary>Cards drawn at once; more come with "Mehr anzeigen" (a thousand cards with pictures made UCut crash).</summary>
     public const int PageSize = 100;
@@ -62,10 +67,10 @@ internal sealed class TwitchViewModel : ObservableObject
         }
 
         SearchCommand = new AsyncCommand(SearchAsync, () => !_searching && !_main.JobRunning);
-        LoadCommand = new AsyncCommand(LoadAsync, () => _all.Any(i => i.Selected) && !_main.JobRunning);
+        LoadCommand = new AsyncCommand(LoadAsync, () => _view.Any(i => i.Selected) && !_main.JobRunning);
         SelectAllCommand = new RelayCommand(p =>
         {
-            foreach (var i in _all)
+            foreach (var i in _view)
             {
                 i.SetSelectedQuietly(p is "true");
             }
@@ -109,9 +114,30 @@ internal sealed class TwitchViewModel : ObservableObject
     public RelayCommand SelectAllCommand { get; }
     public RelayCommand ShowMoreCommand { get; }
 
-    public bool HasMore => _shown < _all.Count;
-    public string MoreText => $"Mehr anzeigen ({_all.Count - _shown} weitere)";
-    public string SelectedText => _all.Count == 0 ? "" : $"{_all.Count(i => i.Selected)} von {_all.Count} ausgewählt · ";
+    public bool HasMore => _shown < _view.Count;
+    public string MoreText => $"Mehr anzeigen ({_view.Count - _shown} weitere)";
+    public string SelectedText => _view.Count == 0 ? "" : $"{_view.Count(i => i.Selected)} von {_view.Count} ausgewählt · ";
+
+    /// <summary>Game drop-down after a search: "GTA V (120)". Only clips of the chosen game are shown and loaded.</summary>
+    public ObservableCollection<GameOption> GameOptions { get; } = [];
+    public bool HasGames => GameOptions.Count > 1;
+
+    public string Game
+    {
+        get => _game;
+        set
+        {
+            if (_updatingOptions)
+            {
+                return;
+            }
+
+            if (Set(ref _game, value ?? AllGames))
+            {
+                ApplyGame();
+            }
+        }
+    }
     public RelayCommand OpenClipCommand { get; }
     public RelayCommand DownloadCommand { get; }
     public RelayCommand OpenSettingsCommand { get; }
@@ -220,7 +246,7 @@ internal sealed class TwitchViewModel : ObservableObject
 
     private async Task LoadAsync()
     {
-        var chosen = _all.Where(i => i.Selected).ToList();
+        var chosen = _view.Where(i => i.Selected).ToList();
         var engine = _main.Engine;
         await _main.RunJobAsync($"{chosen.Count} Twitch-Clip(s) werden geladen", (progress, ct) =>
             engine.ProcessTwitchAsync(chosen.Select(c => c.Clip).ToList(), progress, ct), r =>
@@ -248,6 +274,41 @@ internal sealed class TwitchViewModel : ObservableObject
     private void SetAll(List<TwitchItem> items)
     {
         _all = items;
+        var counts = items.GroupBy(i => i.Game, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new GameOption(g.Key, $"{g.Key} ({g.Count()})"));
+        var options = new List<GameOption> { new(AllGames, $"Alle Spiele ({items.Count})") };
+        options.AddRange(counts);
+        var game = _game;
+        _updatingOptions = true;
+        try
+        {
+            GameOptions.Clear();
+            foreach (var o in options)
+            {
+                GameOptions.Add(o);
+            }
+        }
+        finally
+        {
+            _updatingOptions = false;
+        }
+
+        _game = options.Any(o => string.Equals(o.Name, game, StringComparison.OrdinalIgnoreCase)) ? game : AllGames;
+        OnPropertyChanged(nameof(Game));
+        OnPropertyChanged(nameof(HasGames));
+        ApplyGame();
+    }
+
+    /// <summary>Shows only the chosen game; "Alle"/"Keine" and loading work on what is shown.</summary>
+    private void ApplyGame()
+    {
+        _view = _game == AllGames ? _all : _all.Where(i => string.Equals(i.Game, _game, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (Current is not null && !_view.Contains(Current))
+        {
+            Current = null;
+        }
+
         _shown = 0;
         Items.Clear();
         ShowMore();
@@ -256,12 +317,12 @@ internal sealed class TwitchViewModel : ObservableObject
 
     private void ShowMore()
     {
-        foreach (var i in _all.Skip(_shown).Take(PageSize))
+        foreach (var i in _view.Skip(_shown).Take(PageSize))
         {
             Items.Add(i);
         }
 
-        _shown = Math.Min(_all.Count, _shown + PageSize);
+        _shown = Math.Min(_view.Count, _shown + PageSize);
         OnPropertyChanged(nameof(HasMore));
         OnPropertyChanged(nameof(MoreText));
     }

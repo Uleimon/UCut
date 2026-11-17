@@ -40,7 +40,15 @@
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="Clips suchen" Foreground="White"/></StackPanel>
                 </Button>
             </WrapPanel>
-            <TextBlock Text="{Binding Summary}" Margin="0,0,0,10"/>
+            <DockPanel Margin="0,0,0,10">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Visibility="{Binding HasGames, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="Nur dieses Spiel laden" VerticalAlignment="Center" Margin="0,0,8,0" Style="{StaticResource Subtle}"/>
+                    <ComboBox ItemsSource="{Binding GameOptions}" SelectedValue="{Binding Game}" SelectedValuePath="Name" DisplayMemberPath="Label"
+                              MinWidth="260" MaxDropDownHeight="520" IsTextSearchEnabled="True" TextSearch.TextPath="Name"
+                              ToolTip="Zeigt nur die Clips von diesem Spiel. „Alle“, „Keine“ und „Ausgewählte laden“ gelten dann nur für dieses Spiel."/>
+                </StackPanel>
+                <TextBlock Text="{Binding Summary}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+            </DockPanel>
         </StackPanel>
 
         <!-- Load bar -->
