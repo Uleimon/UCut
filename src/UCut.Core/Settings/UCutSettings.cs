@@ -88,6 +88,17 @@ public sealed class CaptionSettings
 
     /// <summary>Write captions in capital letters.</summary>
     public bool Uppercase { get; set; } = true;
+
+    /// <summary>Hook line: the clip title at the top for the first seconds ("Mit dem Stiefsohn stimmt was nicht ☠️").</summary>
+    public bool HookEnabled { get; set; } = true;
+
+    /// <summary>How long the hook line stays (seconds).</summary>
+    public double HookSeconds { get; set; } = 3.5;
+
+    /// <summary>Vertical centre of the hook line as a fraction of the height (just under the cam).</summary>
+    public double HookVerticalPosition { get; set; } = 0.40;
+
+    public int HookFontSize { get; set; } = 62;
 }
 
 public sealed class CutSettings

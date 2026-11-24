@@ -260,6 +260,7 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
         old.Dispose();
         OnPropertyChanged(nameof(Engine));
         OnPropertyChanged(nameof(WatchFolder));
+        OnPropertyChanged(nameof(LogoOn));
         Library.Refresh();
         _ = CheckToolsAsync();
         _ = ApplyTabletAsync();
@@ -317,6 +318,34 @@ internal sealed class MainViewModel : ObservableObject, IDisposable
             Log.Write($"{names} eingerichtet.");
             UseDownloadedTools();
         });
+    }
+
+    /// <summary>Uleimon logo under the cam on or off (sidebar switch). Off when Aitum Vertical already puts it in.</summary>
+    public bool LogoOn
+    {
+        get => Engine.Settings.Logo.Enabled;
+        set
+        {
+            if (value == Engine.Settings.Logo.Enabled)
+            {
+                return;
+            }
+
+            Engine.Settings.Logo.Enabled = value;
+            OnPropertyChanged();
+            Log.Write(value ? "Uleimon-Logo: an (UCut setzt es unter die Cam)" : "Uleimon-Logo: aus (kommt schon aus Aitum Vertical)");
+            try
+            {
+                var s = SettingsStore.Load(SettingsPath);
+                s.Logo.Enabled = value;
+                SettingsStore.Save(s, SettingsPath);
+                Settings.ReloadCommand.Execute(null);
+            }
+            catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+            {
+                Log.Write($"Einstellung nicht gespeichert: {ex.Message}");
+            }
+        }
     }
 
     /// <summary>Saves the "show the upload steps" switch without touching the other settings.</summary>

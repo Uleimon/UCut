@@ -77,4 +77,20 @@ public class CaptionBuilderTests
 
     [Fact]
     public void Farbe_wird_ins_ASS_Format_umgedreht() => Assert.Equal("&H00E5FF&", CaptionBuilder.ToAssColor("#FFE500"));
+
+    [Fact]
+    public void Hook_Text_ohne_Hashtags_und_auf_zwei_Zeilen()
+    {
+        Assert.Equal("Mit dem Stiefsohn\\Nstimmt was nicht ☠️", CaptionBuilder.HookText("Mit dem Stiefsohn stimmt was nicht ☠️ #gaming #shorts"));
+        Assert.Equal("Kurz und gut", CaptionBuilder.HookText("Kurz und gut"));
+        Assert.Null(CaptionBuilder.HookText("#nur #tags"));
+    }
+
+    [Fact]
+    public void Hook_Text_steht_die_ersten_Sekunden_oben()
+    {
+        var ass = new CaptionBuilder(new CaptionSettings()).BuildAss(new Transcript([]), 1080, 1920, null, "Mit dem Stiefsohn\\Nstimmt was nicht");
+        Assert.Contains("Style: Hook,", ass, StringComparison.Ordinal);
+        Assert.Contains("Dialogue: 1,0:00:00.00,0:00:03.50,Hook,,0,0,0,,{\\pos(540,768)\\fad(0,250)}Mit dem Stiefsohn\\Nstimmt was nicht", ass, StringComparison.Ordinal);
+    }
 }

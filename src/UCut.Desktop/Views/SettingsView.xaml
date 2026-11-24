@@ -190,7 +190,8 @@
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <TextBlock Style="{StaticResource H2}" Text="Untertitel"/>
-                        <CheckBox Content="Untertitel einbrennen" IsChecked="{Binding CaptionsEnabled}"/>
+                        <CheckBox Content="Untertitel einbrennen (Wort für Wort)" IsChecked="{Binding CaptionsEnabled}"/>
+                        <CheckBox Content="Hook-Text: Titel die ersten 3,5 Sekunden oben unter der Cam" IsChecked="{Binding HookEnabled}" Margin="0,8,0,0"/>
                         <CheckBox Content="GROSSBUCHSTABEN" IsChecked="{Binding Uppercase}"/>
                         <TextBlock Style="{StaticResource Field}" Text="Schriftgröße"/>
                         <TextBox Text="{Binding CaptionSize}" Width="120" HorizontalAlignment="Left"/>

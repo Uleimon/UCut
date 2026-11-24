@@ -71,7 +71,45 @@ public sealed class CaptionBuilder(CaptionSettings settings)
 
     private static bool EndsPhrase(string text) => text.Length > 0 && ".,?!…:;".Contains(text[^1], StringComparison.Ordinal);
 
-    public string BuildAss(Transcript transcript, int videoWidth, int videoHeight, double? verticalPosition = null)
+    /// <summary>
+    /// The title as a hook line: hashtags and "#shorts" go, long titles break into two lines (\N).
+    /// Null when nothing is left.
+    /// </summary>
+    public static string? HookText(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return null;
+        }
+
+        var words = title.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => !w.StartsWith('#')).ToList();
+        if (words.Count == 0)
+        {
+            return null;
+        }
+
+        var text = string.Join(' ', words);
+        if (text.Length <= 22 || words.Count < 3)
+        {
+            return text;
+        }
+
+        // break where both lines are about the same length
+        var best = 1;
+        var bestDiff = int.MaxValue;
+        for (var i = 1; i < words.Count; i++)
+        {
+            var diff = Math.Abs(string.Join(' ', words.Take(i)).Length - string.Join(' ', words.Skip(i)).Length);
+            if (diff < bestDiff)
+            {
+                (best, bestDiff) = (i, diff);
+            }
+        }
+
+        return string.Join(' ', words.Take(best)) + "\\N" + string.Join(' ', words.Skip(best));
+    }
+
+    public string BuildAss(Transcript transcript, int videoWidth, int videoHeight, double? verticalPosition = null, string? hook = null)
     {
         var ci = CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
@@ -85,6 +123,8 @@ public sealed class CaptionBuilder(CaptionSettings settings)
         sb.AppendLine("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding");
         var fontSize = (int)Math.Round(settings.FontSize * videoWidth / 910.0);
         sb.AppendLine(ci, $"Style: Cap,{settings.Font},{fontSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,6,3,5,40,40,0,1");
+        var hookSize = (int)Math.Round(settings.HookFontSize * videoWidth / 910.0);
+        sb.AppendLine(ci, $"Style: Hook,Arial,{hookSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,5,2,5,40,40,0,1");
         sb.AppendLine();
         sb.AppendLine("[Events]");
         sb.AppendLine("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text");
@@ -92,6 +132,13 @@ public sealed class CaptionBuilder(CaptionSettings settings)
         var x = videoWidth / 2;
         var y = (int)Math.Round(videoHeight * (verticalPosition ?? settings.VerticalPosition));
         var highlight = ToAssColor(settings.HighlightColor);
+        if (hook is not null)
+        {
+            var hookY = (int)Math.Round(videoHeight * settings.HookVerticalPosition);
+            var text = string.Join("\\N", hook.Split("\\N").Select(Escape));
+            sb.AppendLine(ci, $"Dialogue: 1,{FormatTime(0)},{FormatTime(settings.HookSeconds)},Hook,,0,0,0,,{{\\pos({x},{hookY})\\fad(0,250)}}{text}");
+        }
+
         foreach (var e in BuildEvents(transcript))
         {
             var parts = e.Words.Select((w, i) => i == e.HighlightIndex

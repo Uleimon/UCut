@@ -104,7 +104,30 @@
                 <Button DockPanel.Dock="Bottom" HorizontalAlignment="Center" Margin="0,8,0,8" Content="{Binding MoreText}" Command="{Binding ShowMoreCommand}"
                         Visibility="{Binding HasMore, Converter={StaticResource BoolToVis}}"
                         ToolTip="Es werden immer 120 Clips auf einmal gezeigt, damit UCut flüssig bleibt. Suche, Spiel-Filter und Sortierung gehen über alle Clips."/>
-                <ListBox x:Name="Gallery" ItemsSource="{Binding Clips}" SelectedItem="{Binding Selected}"
+                <Border DockPanel.Dock="Top" Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="12,8" Margin="0,0,12,10"
+                        Visibility="{Binding HasMarked, Converter={StaticResource BoolToVis}}">
+                    <DockPanel>
+                        <TextBlock Text="{Binding MarkedText}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Command="{Binding UnloadMarkedCommand}" Margin="0,0,8,0" ToolTip="Aus UCut rausnehmen, ohne zu löschen (Ordner _Entladen)">
+                                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8BB;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="Entladen"/></StackPanel>
+                            </Button>
+                            <Button Command="{Binding DownloadMarkedCommand}" Margin="0,0,8,0" ToolTip="Kopien mit dem Titel als Namen in deinen Downloads-Ordner">
+                                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE896;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="Herunterladen"/></StackPanel>
+                            </Button>
+                            <Button Command="{Binding SubtitlesMarkedCommand}" Margin="0,0,8,0" Visibility="{Binding MarkedHasPendingSubtitles, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8D2;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="Untertitel nachholen"/></StackPanel>
+                            </Button>
+                            <Button Command="{Binding DeleteMarkedCommand}" Margin="0,0,8,0">
+                                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE74D;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="Löschen"/></StackPanel>
+                            </Button>
+                            <Button Content="Auswahl aufheben" Click="ClearMarked"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                <ListBox x:Name="Gallery" ItemsSource="{Binding Clips}" SelectedItem="{Binding Selected}" SelectionMode="Extended"
+                         SelectionChanged="GallerySelectionChanged"
+                         ToolTip="Mehrere Clips: Strg-Klick, Shift-Klick oder Strg+A"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          VirtualizingPanel.IsVirtualizing="False">
                     <ListBox.ItemsPanel>

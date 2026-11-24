@@ -184,6 +184,7 @@ internal sealed class SettingsViewModel : ObservableObject
     }
 
     public bool CaptionsEnabled { get => _s.Captions.Enabled; set { _s.Captions.Enabled = value; OnPropertyChanged(); } }
+    public bool HookEnabled { get => _s.Captions.HookEnabled; set { _s.Captions.HookEnabled = value; OnPropertyChanged(); } }
     public int CaptionSize { get => _s.Captions.FontSize; set { _s.Captions.FontSize = Math.Clamp(value, 30, 160); OnPropertyChanged(); } }
     public int WordsPerLine { get => _s.Captions.WordsPerLine; set { _s.Captions.WordsPerLine = Math.Clamp(value, 1, 8); OnPropertyChanged(); } }
     public string HighlightColor { get => _s.Captions.HighlightColor; set { _s.Captions.HighlightColor = value.Trim(); OnPropertyChanged(); } }

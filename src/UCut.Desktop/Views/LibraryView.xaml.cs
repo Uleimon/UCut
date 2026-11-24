@@ -47,6 +47,19 @@ public partial class LibraryView : UserControl
         };
     }
 
+    private void GallerySelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        _vm?.SetMarked(Gallery.SelectedItems.OfType<ClipCard>());
+
+    private void ClearMarked(object sender, RoutedEventArgs e)
+    {
+        var keep = _vm?.Selected;
+        Gallery.SelectedItems.Clear();
+        if (keep is not null && _vm is not null)
+        {
+            _vm.Selected = keep;
+        }
+    }
+
     private void OnVmChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(LibraryViewModel.Selected))

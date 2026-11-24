@@ -126,15 +126,7 @@ public sealed class ClipPipeline(
                 log($"  Layout: {note}");
             }
 
-            string? assName = null;
             var withCaptions = settings.Captions.Enabled && clipTranscript.Words.Count > 0;
-            if (withCaptions)
-            {
-                assName = "captions.ass";
-                var ass = new CaptionBuilder(settings.Captions).BuildAss(clipTranscript, outWidth, outHeight, layout.CaptionY);
-                await File.WriteAllTextAsync(Path.Combine(work.FullName, assName), ass, ct).ConfigureAwait(false);
-            }
-
             var laughs = info.HasAudio ? await FindLaughsAsync(sourceFile, cut, clipTranscript, info.AudioTracks.Count, ct).ConfigureAwait(false) : LaughResult.None;
 
             // Text first: the title goes into the file name.
@@ -169,6 +161,20 @@ public sealed class ClipPipeline(
                 : OutputNaming.ClipPath(settings.OutputFolder, game.FolderName, origin?.RecordedAt.ToLocalTime() ?? now, text.Title);
             Directory.CreateDirectory(Path.GetDirectoryName(output)!);
             var tmpOut = Path.Combine(work.FullName, "out.mp4");
+
+            // Word captions and the hook line (title at the top for the first seconds, like big streamers' shorts)
+            string? assName = null;
+            var hook = settings.Captions.HookEnabled ? CaptionBuilder.HookText(text.Title) : null;
+            if (withCaptions || hook is not null)
+            {
+                assName = "captions.ass";
+                var ass = new CaptionBuilder(settings.Captions).BuildAss(withCaptions ? clipTranscript : new Transcript([]), outWidth, outHeight, layout.CaptionY, hook);
+                await File.WriteAllTextAsync(Path.Combine(work.FullName, assName), ass, ct).ConfigureAwait(false);
+                if (hook is not null)
+                {
+                    log($"  Hook-Text oben: {hook.Replace("\\N", " ", StringComparison.Ordinal)}");
+                }
+            }
 
             var job = new RenderJob(Path.GetFullPath(sourceFile), tmpOut, cut, outWidth, outHeight, assName, logoPath, settings.Logo, layout.LogoCenterY, reframe, layout.UseCover, info.AudioTracks.Count);
             log("  Video wird gerendert ...");

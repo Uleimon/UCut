@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
@@ -305,6 +306,51 @@ internal sealed class LibraryViewModel : ObservableObject
             System.IO.Directory.CreateDirectory(UCut.Upload.UploadCopy.DefaultFolder);
             Shell.Open(UCut.Upload.UploadCopy.DefaultFolder);
         });
+        DeleteMarkedCommand = new RelayCommand(_ =>
+        {
+            var cards = _marked.ToList();
+            if (cards.Count > 0 && _main.Dialogs.Confirm("Clips löschen", $"{cards.Count} Clips wirklich löschen?\nVideo, Infodatei und Vorschaubild werden entfernt.\n\nTipp: „Entladen“ nimmt sie nur raus, ohne zu löschen.", true))
+            {
+                _ = DeleteManyAsync(cards);
+            }
+        }, _ => _marked.Count > 0 && !_main.JobRunning);
+        UnloadMarkedCommand = new RelayCommand(_ => { if (_marked.Count > 0) { _ = UnloadAsync(_marked.ToList()); } }, _ => _marked.Count > 0 && !_main.JobRunning);
+        SubtitlesMarkedCommand = new RelayCommand(_ => AddSubtitles(_marked.Where(c => c.SubtitlesPending).ToList()),
+            _ => _marked.Any(c => c.SubtitlesPending) && !_main.JobRunning);
+        DownloadMarkedCommand = new RelayCommand(async _ =>
+        {
+            var items = _marked.Select(c => (c.Clip.VideoPath, c.Title)).ToList();
+            if (items.Count == 0)
+            {
+                return;
+            }
+
+            var (done, last, error) = await Task.Run(() =>
+            {
+                var n = 0;
+                string? path = null;
+                string? err = null;
+                foreach (var (video, title) in items)
+                {
+                    try
+                    {
+                        path = UCut.Upload.UploadCopy.SaveCopy(video, title, UCut.Upload.UploadCopy.DownloadsFolder);
+                        n++;
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        err = ex.Message;
+                    }
+                }
+
+                return (n, path, err);
+            });
+            _main.Log.Write($"{done} Clip(s) in Downloads gelegt" + (error is null ? "." : $", Fehler: {error}"));
+            if (last is not null)
+            {
+                Shell.ShowInExplorer(last);
+            }
+        }, _ => _marked.Count > 0);
         DeleteCommand = new RelayCommand(_ =>
         {
             if (Selected is { } c && _main.Dialogs.Confirm("Clip löschen", $"„{c.Title}“ wirklich löschen?\nVideo, Infodatei und Vorschaubild werden entfernt.", true))
@@ -313,6 +359,26 @@ internal sealed class LibraryViewModel : ObservableObject
             }
         }, _ => Selected is not null);
     }
+
+    private List<ClipCard> _marked = [];
+
+    /// <summary>Clips picked with Ctrl/Shift-click (or Strg+A) in the gallery.</summary>
+    public void SetMarked(IEnumerable<ClipCard> cards)
+    {
+        _marked = cards.ToList();
+        OnPropertyChanged(nameof(HasMarked));
+        OnPropertyChanged(nameof(MarkedText));
+        OnPropertyChanged(nameof(MarkedHasPendingSubtitles));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    public bool HasMarked => _marked.Count > 1;
+    public string MarkedText => $"{_marked.Count} Clips ausgewählt";
+    public bool MarkedHasPendingSubtitles => _marked.Any(c => c.SubtitlesPending);
+    public RelayCommand DeleteMarkedCommand { get; }
+    public RelayCommand UnloadMarkedCommand { get; }
+    public RelayCommand SubtitlesMarkedCommand { get; }
+    public RelayCommand DownloadMarkedCommand { get; }
 
     public ObservableCollection<ClipCard> Clips { get; } = [];
     public ObservableCollection<string> Games { get; } = [AllGames];
@@ -585,6 +651,53 @@ internal sealed class LibraryViewModel : ObservableObject
         if (keep != game)
         {
             ApplyFilter();
+        }
+    }
+
+    /// <summary>Several clips: cards go at once, files are deleted in the background.</summary>
+    private async Task DeleteManyAsync(List<ClipCard> cards)
+    {
+        foreach (var c in cards)
+        {
+            c.Dirty = false;
+        }
+
+        if (Selected is { } sel && cards.Contains(sel))
+        {
+            Selected = null;
+        }
+
+        var gone = new HashSet<ClipCard>(cards);
+        _all.RemoveAll(gone.Contains);
+        ApplyFilter();
+        RefreshGameOptions();
+        OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(HasPendingSubtitles));
+        OnPropertyChanged(nameof(PendingSubtitlesText));
+        var (failed, error) = await Task.Run(() =>
+        {
+            var errors = 0;
+            string? message = null;
+            foreach (var c in cards)
+            {
+                try
+                {
+                    ClipLibrary.Delete(c.Clip);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+                {
+                    errors++;
+                    message = ex.Message;
+                }
+            }
+
+            return (errors, message);
+        });
+        _main.Log.Write($"{cards.Count - failed} Clip(s) gelöscht" + (failed > 0 ? $", {failed} gingen nicht: {error}" : "."));
+        if (failed > 0)
+        {
+            _main.Dialogs.Info("Clips löschen", $"{failed} Clip(s) konnten nicht gelöscht werden:\n{error}");
+            Refresh();
         }
     }
 
