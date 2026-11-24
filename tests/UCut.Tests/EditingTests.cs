@@ -122,10 +122,13 @@ public class EditingTests
             var outInfo = await ff.ProbeAsync(outFile);
             Assert.Single(outInfo.AudioTracks);
             var pcm = await ff.ReadPcmAsync(outFile, 0.2, 1.5, 8000);
-            Assert.True(pcm.Max(v => Math.Abs((int)v)) > 3000, "Ausgabe ist stumm");
+            // sine at 1/8 full scale is about 4096; mono to stereo and back can take 3 dB off, so 1000 means "clearly not silent"
+            var peak = pcm.Max(v => Math.Abs((int)v));
+            Assert.True(peak > 1000, $"Ausgabe ist stumm (Spitze {peak})");
 
             var mixed = await ff.ReadPcmAsync(src, 0.2, 1.5, 8000, info.AudioTracks.Count);
-            Assert.True(mixed.Max(v => Math.Abs((int)v)) > 3000, "Mischung für Whisper ist stumm");
+            var mixedPeak = mixed.Max(v => Math.Abs((int)v));
+            Assert.True(mixedPeak > 1000, $"Mischung für Whisper ist stumm (Spitze {mixedPeak})");
         }
         finally
         {
