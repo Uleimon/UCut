@@ -40,6 +40,26 @@ public class AnalysisTests
     }
 
     [Fact]
+    public async Task Ohne_Worte_gibt_es_einen_Hook_statt_Spielname_Clip()
+    {
+        var t = await new TemplateClipWriter().WriteAsync(new ClipContext("", "Grand Theft Auto VI", 30, ["#gta6"], ["#fyp"], "Uleimon", Seed: 6));
+        Assert.DoesNotContain("Clip", t.Title, StringComparison.Ordinal);
+        Assert.Equal("GTA 6 ist einfach kaputt 💀", t.Title);
+        Assert.True(TemplateClipWriter.IsPlaceholderTitle(t.YouTubeTitle, "Grand Theft Auto VI"));
+
+        var laugh = await new TemplateClipWriter().WriteAsync(new ClipContext("", "GTA V", 30, [], [], "Uleimon", Laughs: 2, Seed: 1));
+        Assert.Contains("😂", laugh.Title, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Alter_Platzhalter_Titel_wird_erkannt_eigener_nicht()
+    {
+        Assert.True(TemplateClipWriter.IsPlaceholderTitle("Grand Theft Auto VI Clip #shorts", "Grand Theft Auto VI"));
+        Assert.False(TemplateClipWriter.IsPlaceholderTitle("Mein eigener Titel #shorts", "Grand Theft Auto VI"));
+        Assert.Equal(TemplateClipWriter.StableSeed("a.mp4"), TemplateClipWriter.StableSeed("a.mp4"));
+    }
+
+    [Fact]
     public void Claude_Antwort_wird_gelesen()
     {
         var t = ClaudeClipWriter.Parse("""

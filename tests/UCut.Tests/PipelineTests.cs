@@ -226,7 +226,9 @@ public class InstantClipTests
             Assert.Equal(3, after.Metadata.Edit!.Words.Count);
             Assert.Equal(0, after.Metadata.Edit.CutStart); // same cut as before
             Assert.Equal(clip.VideoPath, after.VideoPath);
-            Assert.Equal(title, after.Metadata.YouTube.Title);
+            // the stock hook made without words gives way to a title from what was said
+            Assert.True(TemplateClipWriter.IsPlaceholderTitle(title, clip.Metadata.Game));
+            Assert.Equal("Wer hat Kredit? #shorts", after.Metadata.YouTube.Title);
         }
         finally
         {

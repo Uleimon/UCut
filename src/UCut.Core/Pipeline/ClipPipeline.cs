@@ -144,8 +144,20 @@ public sealed class ClipPipeline(
             var context = new ClipContext(
                 clipTranscript.Text, game.FolderName, cut.Duration,
                 settings.Games.Hashtags.TryGetValue(game.FolderName, out var gameTags) ? gameTags : [],
-                settings.Games.CommonHashtags, settings.Writer.ChannelName, trends, laughs.Count);
-            var text = previous is null
+                settings.Games.CommonHashtags, settings.Writer.ChannelName, trends, laughs.Count,
+                TemplateClipWriter.StableSeed(Path.GetFileName(sourceFile)));
+            // Texts made without words ("GTA V Clip", a stock hook) get written anew once the words are there.
+            // Old "GTA V Clip" titles also get a hook, even when nobody talks.
+            var placeholder = previous is not null && previous.Transcript.Trim().Length == 0
+                              && TemplateClipWriter.IsPlaceholderTitle(previous.YouTube.Title, previous.Game)
+                              && (clipTranscript.Words.Count > 0
+                                  || previous.YouTube.Title.StartsWith($"{previous.Game} Clip", StringComparison.OrdinalIgnoreCase));
+            if (placeholder)
+            {
+                log("  Titel war nur ein Platzhalter, jetzt gibt es Text: Titel und Hashtags werden neu geschrieben");
+            }
+
+            var text = previous is null || placeholder
                 ? await WriteTextAsync(context, ct).ConfigureAwait(false)
                 : FromPrevious(previous);
             if (text.Funniness is null && laughs.Count > 0)
@@ -214,8 +226,12 @@ public sealed class ClipPipeline(
             if (previous is not null)
             {
                 meta.CreatedAt = previous.CreatedAt;
-                meta.Funniness = previous.Funniness;
-                meta.TextSource = previous.TextSource;
+                if (!placeholder)
+                {
+                    meta.Funniness = previous.Funniness;
+                    meta.TextSource = previous.TextSource;
+                }
+
                 meta.Uploaded = previous.Uploaded;
                 meta.Instagram = previous.Instagram;
                 meta.Origin ??= previous.Origin;

@@ -103,9 +103,31 @@ internal sealed class RedoViewModel : ObservableObject
         _ => "Automatisch: UCut sucht die Cam selbst.",
     };
 
-    public string WordsHint => HasWords
-        ? "Falsche Wörter einfach überschreiben. Ein leeres Feld löscht das Wort."
-        : "Für diesen Clip gibt es noch keine Wortzeiten (er ist mit einer älteren Version gemacht). Mach ihn einmal neu, danach kannst du hier die Wörter bearbeiten.";
+    public string WordsHint
+    {
+        get
+        {
+            if (HasWords)
+            {
+                return "Falsche Wörter einfach überschreiben. Ein leeres Feld löscht das Wort.";
+            }
+
+            if (_clip.Metadata.SubtitlesPending)
+            {
+                return "Dieser Clip ist ohne Untertitel gemacht (Instant Clip aus). Klick unten auf „Create“: UCut erkennt dabei die Wörter. "
+                     + "Danach öffnest du „Create“ nochmal und kannst sie hier bearbeiten.";
+            }
+
+            if (_clip.Metadata.Edit is not null)
+            {
+                return "UCut hat in diesem Clip keine Sprache erkannt, deshalb gibt es nichts zu bearbeiten. "
+                     + "Wenn doch jemand redet: unten auf „Create“ klicken, dann hört UCut noch einmal hin (alle Tonspuren).";
+            }
+
+            return "Dieser Clip ist mit einer älteren UCut-Version gemacht, da fehlen die Wortzeiten. Klick unten auf „Create“. "
+                 + "Danach öffnest du „Create“ nochmal und kannst die Wörter hier bearbeiten.";
+        }
+    }
 
     /// <summary>Loads a still picture of the original (middle of the cut) for drawing the cam.</summary>
     public async Task LoadFrameAsync()
